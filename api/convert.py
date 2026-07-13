@@ -1,6 +1,6 @@
 """文件转换接口。"""
 
-from fastapi import APIRouter, File, UploadFile
+from fastapi import APIRouter, File, Request, UploadFile
 from starlette.concurrency import run_in_threadpool
 
 from api.models.convert import ConvertResponse
@@ -12,8 +12,11 @@ router = APIRouter(tags=["convert"])
 
 @router.post("/convert", response_model=ConvertResponse)
 async def convert_file(
+    request: Request,
     file: UploadFile = File(...),
 ) -> ConvertResponse:
+    """接收上传文件，并调用应用生命周期内复用的转换服务。"""
+
     temp_file = await save_upload_file(file, settings=SETTINGS)
 
     try:
@@ -22,7 +25,8 @@ async def convert_file(
             content_type=file.content_type,
             size_bytes=temp_file.size_bytes,
         )
-        service = ConvertService(settings=SETTINGS)
+        # ConvertService 在应用启动时装配，这里只读取共享实例，不重复创建客户端。
+        service: ConvertService = request.app.state.convert_service
         result = await run_in_threadpool(
             service.convert,
             temp_file.path,

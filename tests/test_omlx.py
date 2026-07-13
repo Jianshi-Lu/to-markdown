@@ -97,6 +97,26 @@ class OmlxChatCompletionsTest(unittest.TestCase):
         self.assertEqual(len(state.errors), 1)
         self.assertIn("output limit", state.errors[0])
 
+    def test_call_state_provider_isolates_requests(self) -> None:
+        completions = FakeCompletions("OCR result")
+        first_state = OmlxOcrCallState()
+        second_state = OmlxOcrCallState()
+        states = iter((first_state, second_state))
+        wrapper = OmlxChatCompletions(
+            completions,
+            omlx_base_url="http://127.0.0.1:8000/v1",
+            call_state_provider=lambda: next(states),
+            max_tokens=4096,
+            temperature=0,
+            repetition_penalty=1.1,
+        )
+
+        wrapper.create(model="ocr-model", messages=[])
+        wrapper.create(model="ocr-model", messages=[])
+
+        self.assertEqual(first_state.request_count, 1)
+        self.assertEqual(second_state.request_count, 1)
+
 
 if __name__ == "__main__":
     unittest.main()

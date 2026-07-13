@@ -1,6 +1,10 @@
 """oMLX client 与 OCR 输出解码适配。"""
 
+from __future__ import annotations
+
 import socket
+from collections.abc import Callable
+from contextvars import ContextVar, Token
 from dataclasses import dataclass, field
 from types import SimpleNamespace
 from urllib.parse import urlparse
@@ -87,20 +91,30 @@ class OmlxChatCompletions:
         self,
         openai_completions,
         omlx_base_url: str,
-        ocr_call_state: "OmlxOcrCallState",
-        max_tokens: int,
-        temperature: float,
-        repetition_penalty: float,
+        ocr_call_state: "OmlxOcrCallState" | None = None,
+        max_tokens: int = 4096,
+        temperature: float = 0,
+        repetition_penalty: float = 1.1,
+        call_state_provider: Callable[[], "OmlxOcrCallState"] | None = None,
     ):
+        """保存共享 completions 连接，并接收请求状态提供器。"""
+
         self._openai_completions = openai_completions
         self._omlx_base_url = omlx_base_url
-        self._ocr_call_state = ocr_call_state
+        if call_state_provider is None:
+            if ocr_call_state is None:
+                raise ValueError("ocr_call_state or call_state_provider is required")
+            call_state_provider = lambda: ocr_call_state
+        self._call_state_provider = call_state_provider
         self._max_tokens = max_tokens
         self._temperature = temperature
         self._repetition_penalty = repetition_penalty
 
     def create(self, *args, **kwargs) -> SimpleNamespace:
-        self._ocr_call_state.request_count += 1
+        """转发一次 OCR 请求，并把结果和 warning 写入当前请求状态。"""
+
+        call_state = self._call_state_provider()
+        call_state.request_count += 1
         kwargs.setdefault("max_tokens", self._max_tokens)
         kwargs.setdefault("temperature", self._temperature)
         extra_body = dict(kwargs.get("extra_body") or {})
@@ -119,7 +133,7 @@ class OmlxChatCompletions:
                     "The oMLX request could not be completed.",
                 ]
             )
-            self._ocr_call_state.add_error(message)
+            call_state.add_error(message)
             raise OmlxUnavailableError(message) from exc
         except Exception as exc:
             message = "\n".join(
@@ -130,7 +144,7 @@ class OmlxChatCompletions:
                     f"Error: {type(exc).__name__}: {exc}",
                 ]
             )
-            self._ocr_call_state.add_error(message)
+            call_state.add_error(message)
             raise
 
         choices = []
@@ -140,13 +154,13 @@ class OmlxChatCompletions:
             finish_reason = getattr(choice, "finish_reason", None)
 
             if has_degenerate_character_run(decoded_content):
-                self._ocr_call_state.add_error(
+                call_state.add_error(
                     "oMLX returned degenerate OCR output with a repeated character; "
                     "the OCR text was discarded."
                 )
                 decoded_content = ""
             elif finish_reason == "length":
-                self._ocr_call_state.add_error(
+                call_state.add_error(
                     f"oMLX OCR reached the {kwargs['max_tokens']}-token output limit; "
                     "the returned text may be incomplete."
                 )
@@ -215,7 +229,7 @@ class OmlxOcrCallState:
 
 
 class OmlxOcrClient:
-    """提供给 MarkItDown 的 OpenAI-compatible client。"""
+    """提供给 MarkItDown 的可复用 OpenAI-compatible client。"""
 
     def __init__(
         self,
@@ -225,21 +239,54 @@ class OmlxOcrClient:
         temperature: float,
         repetition_penalty: float,
     ):
-        self.call_state = OmlxOcrCallState()
-        openai_http_client = httpx.Client(trust_env=False)
-        openai_api_client = OpenAI(
+        """创建可复用的 OpenAI-compatible client，不在此处发起网络请求。"""
+
+        # ContextVar 让共享的 completions 连接拥有请求级状态。
+        self._call_state: ContextVar[OmlxOcrCallState | None] = ContextVar(
+            "omlx_ocr_call_state",
+            default=None,
+        )
+        self._openai_http_client = httpx.Client(trust_env=False)
+        self._openai_api_client = OpenAI(
             base_url=base_url,
             api_key=api_key,
-            http_client=openai_http_client,
+            http_client=self._openai_http_client,
             max_retries=0,
         )
         self.chat = SimpleNamespace(
             completions=OmlxChatCompletions(
-                openai_api_client.chat.completions,
+                self._openai_api_client.chat.completions,
                 omlx_base_url=base_url,
-                ocr_call_state=self.call_state,
+                call_state_provider=self._get_call_state,
                 max_tokens=max_tokens,
                 temperature=temperature,
                 repetition_penalty=repetition_penalty,
             )
         )
+
+    def begin_request(self) -> Token:
+        """为一次转换建立隔离的 OCR 调用状态。"""
+
+        return self._call_state.set(OmlxOcrCallState())
+
+    def end_request(self, token: Token) -> OmlxOcrCallState:
+        """读取并清理当前转换的 OCR 调用状态。"""
+
+        state = self._get_call_state()
+        self._call_state.reset(token)
+        return state
+
+    def _get_call_state(self) -> OmlxOcrCallState:
+        """读取当前请求状态；未进入转换上下文时创建兜底状态。"""
+
+        state = self._call_state.get()
+        if state is None:
+            state = OmlxOcrCallState()
+            self._call_state.set(state)
+        return state
+
+    def close(self) -> None:
+        """释放 OpenAI SDK 和底层 HTTP client。"""
+
+        # 只在应用 shutdown 时调用；请求处理期间不要关闭共享连接。
+        self._openai_api_client.close()

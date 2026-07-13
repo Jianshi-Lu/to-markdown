@@ -10,26 +10,49 @@ from convert.types import ConvertResult, SourceFile
 
 
 class ConvertService:
-    """编排一次本地文件到 Markdown 的同步转换。"""
+    """复用转换运行时并编排本地文件到 Markdown 的同步转换。"""
 
     def __init__(
         self,
         settings: Settings,
         ocr_cleaner: OcrMarkdownCleaner | None = None,
+        markitdown_converter: MarkItDownConverter | None = None,
+        omlx_ocr_client: OmlxOcrClient | None = None,
     ):
+        """装配一次转换运行时；可注入依赖用于测试。"""
+
         self._settings = settings
         self._ocr_cleaner = ocr_cleaner or OcrMarkdownCleaner()
+        # 正式服务只在 lifespan 中构造一次，后续请求复用同一组第三方客户端。
+        if markitdown_converter is None or omlx_ocr_client is None:
+            (
+                markitdown_converter,
+                omlx_ocr_client,
+            ) = self._build_conversion_runtime()
+        self._markitdown_converter = markitdown_converter
+        self._omlx_ocr_client = omlx_ocr_client
+
+    def close(self) -> None:
+        """释放第三方客户端持有的 HTTP 资源。"""
+
+        self._omlx_ocr_client.close()
 
     def convert(
         self,
         file_path: Path,
         source_file: SourceFile,
     ) -> ConvertResult:
+        """执行一次转换，并隔离本次请求的 OCR 调用状态。"""
+
         warnings: list[str] = []
 
-        markitdown_converter, omlx_ocr_client = self._create_markitdown_converter()
-        markdown = markitdown_converter.convert(file_path)
-        warnings.extend(omlx_ocr_client.call_state.errors)
+        # 客户端共享连接，状态通过 ContextVar 按请求隔离，避免并发 warning 串线。
+        request_token = self._omlx_ocr_client.begin_request()
+        try:
+            markdown = self._markitdown_converter.convert(file_path)
+        finally:
+            ocr_call_state = self._omlx_ocr_client.end_request(request_token)
+        warnings.extend(ocr_call_state.errors)
 
         markdown, normalized, cleaner_warnings = self._ocr_cleaner.clean(markdown)
         warnings.extend(cleaner_warnings)
@@ -42,9 +65,11 @@ class ConvertService:
             warnings=warnings,
         )
 
-    def _create_markitdown_converter(
+    def _build_conversion_runtime(
         self,
     ) -> tuple[MarkItDownConverter, OmlxOcrClient]:
+        """创建应用级复用的 MarkItDown 与 oMLX 运行时。"""
+
         omlx_ocr_client = OmlxOcrClient(
             base_url=self._settings.omlx_base_url,
             api_key=self._settings.omlx_api_key,

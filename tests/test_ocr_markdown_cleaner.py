@@ -1,7 +1,7 @@
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import Mock, patch
+from unittest.mock import Mock
 
 from core.config import Settings
 from convert.ocr_markdown_cleaner import OcrMarkdownCleaner
@@ -103,6 +103,12 @@ class OcrMarkdownCleanerTest(unittest.TestCase):
     def test_service_always_runs_ocr_cleaner(self) -> None:
         cleaner = Mock()
         cleaner.clean.return_value = ("cleaned", True, [])
+        markitdown_converter = Mock()
+        markitdown_converter.convert.return_value = "raw markdown"
+        ocr_call_state = SimpleNamespace(errors=[])
+        omlx_ocr_client = Mock()
+        omlx_ocr_client.begin_request.return_value = object()
+        omlx_ocr_client.end_request.return_value = ocr_call_state
         service = ConvertService(
             settings=Settings(
                 omlx_base_url="http://127.0.0.1:8000/v1",
@@ -116,24 +122,18 @@ class OcrMarkdownCleanerTest(unittest.TestCase):
                 max_upload_mb=100,
             ),
             ocr_cleaner=cleaner,
+            markitdown_converter=markitdown_converter,
+            omlx_ocr_client=omlx_ocr_client,
         )
-        markitdown_converter = Mock()
-        markitdown_converter.convert.return_value = "raw markdown"
-        omlx_ocr_client = SimpleNamespace(call_state=SimpleNamespace(errors=[]))
 
-        with patch.object(
-            service,
-            "_create_markitdown_converter",
-            return_value=(markitdown_converter, omlx_ocr_client),
-        ):
-            result = service.convert(
-                Path("document.docx"),
-                SourceFile(
-                    filename="document.docx",
-                    content_type=None,
-                    size_bytes=1,
-                ),
-            )
+        result = service.convert(
+            Path("document.docx"),
+            SourceFile(
+                filename="document.docx",
+                content_type=None,
+                size_bytes=1,
+            ),
+        )
 
         cleaner.clean.assert_called_once_with("raw markdown")
         self.assertEqual(result.markdown, "cleaned")
