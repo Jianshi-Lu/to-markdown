@@ -1,4 +1,4 @@
-"""MarkItDown 适配器。"""
+"""MarkItDown 转换集成。"""
 
 from pathlib import Path
 from typing import Any
@@ -8,8 +8,8 @@ from markitdown import MarkItDown
 from core.errors import ConversionError
 
 
-class MarkItDownAdapter:
-    """隔离 MarkItDown 的参数、结果和异常。"""
+class MarkItDownConverter:
+    """封装 MarkItDown 的参数、结果和异常。"""
 
     def __init__(
         self,
@@ -17,7 +17,7 @@ class MarkItDownAdapter:
         llm_model: str | None = None,
         llm_prompt: str | None = None,
     ):
-        kwargs: dict[str, Any] = {}
+        kwargs: dict[str, Any] = {"enable_plugins": True}
         if llm_client is not None:
             kwargs["llm_client"] = llm_client
         if llm_model is not None:
