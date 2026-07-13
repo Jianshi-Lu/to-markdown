@@ -27,17 +27,17 @@
 ## 请求生命周期
 
 ```text
-POST /v1/convert
-  -> api.routes.convert 接收 UploadFile 和表单参数
+POST /convert
+  -> api.convert 接收 UploadFile 和表单参数
   -> storage.temp_files 保存为临时文件
-  -> services.conversion_service 编排转换
+  -> convert.service 编排转换
   -> adapters.markitdown_adapter 调用 MarkItDown
   -> adapters.omlx_client 作为 MarkItDown 的 llm_client
-  -> services.markdown_normalizer 第一版跳过
-  -> api.schemas.ConvertResponse 返回 Markdown
+  -> convert.markdown_normalizer 第一版跳过
+  -> api.models.convert.ConvertResponse 返回 Markdown
 ```
 
-第一版接口是同步阻塞的：一次请求等待一次转换完成。内部核心入口是 `ConversionService.convert(...)`，不依赖 FastAPI request，因此未来可以被异步任务 worker 复用。
+第一版接口是同步阻塞的：一次请求等待一次转换完成。内部核心入口是 `ConvertService.convert(...)`，不依赖 FastAPI request，因此未来可以被异步任务 worker 复用。
 
 ## API
 
@@ -45,11 +45,11 @@ POST /v1/convert
 
 检查 Web 服务是否存活。
 
-### `GET /v1/health/omlx`
+### `GET /health/omlx`
 
 检查 oMLX 的 TCP endpoint 是否可连。它只验证 host:port，不代表模型推理一定成功。
 
-### `POST /v1/convert`
+### `POST /convert`
 
 请求格式：`multipart/form-data`
 
@@ -75,7 +75,7 @@ POST /v1/convert
 - `OMLX_BASE_URL`：默认 `http://127.0.0.1:8000/v1`。
 - `OMLX_API_KEY`：默认 `20020228`，作为本地 oMLX 占位 token。
 - `OMLX_MODEL`：默认 `unlimited-ocr-mxfp8-mlx`。
-- `TEMP_DIR`：临时文件根目录，默认系统临时目录。
+- `TEMP_DIR`：临时文件目录，默认项目根目录下的 `.runtime/uploads/`。
 - `MAX_UPLOAD_MB`：上传文件大小限制，默认 `100`。
 
 ## 错误处理
@@ -100,4 +100,3 @@ POST /v1/convert
 - 页面端 UI。
 
 这些能力后续都可以在当前分层上扩展，不需要改写 MarkItDown/oMLX 的核心适配逻辑。
-

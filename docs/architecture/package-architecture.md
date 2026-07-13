@@ -14,18 +14,18 @@
 ```text
 main.py
 api/
-  routes/
+  convert.py
+  health.py
+  models/
     convert.py
     health.py
-  schemas.py
 core/
   config.py
   errors.py
   logging.py
-domain/
-  models.py
-services/
-  conversion_service.py
+convert/
+  service.py
+  types.py
   markdown_normalizer.py
 adapters/
   markitdown_adapter.py
@@ -52,9 +52,10 @@ uvicorn main:app --reload
 
 HTTP API 层。
 
-- `routes/convert.py`：实现 `POST /v1/convert`。
-- `routes/health.py`：实现健康检查。
-- `schemas.py`：定义对外响应模型。
+- `convert.py`：实现 `POST /convert`。
+- `health.py`：实现健康检查。
+- `models/convert.py`：定义文件转换响应模型。
+- `models/health.py`：定义健康检查响应模型。
 
 这一层不直接 import `MarkItDown`、`OpenAI` 或 `httpx`。
 
@@ -66,24 +67,15 @@ HTTP API 层。
 - `errors.py`：定义统一业务异常。
 - `logging.py`：保留统一日志入口。
 
-### `domain`
-
-内部业务模型。
-
-- `UploadedFileInfo`：上传文件元信息。
-- `ConversionOptions`：转换选项。
-- `ConversionResult`：转换结果。
-
-这些对象不依赖 FastAPI，未来同步接口、异步 worker、命令行工具都可以共用。
-
-### `services`
+### `convert`
 
 业务编排层。
 
-- `ConversionService`：负责完整转换流程。
-- `MarkdownNormalizer`：文本 LLM 二次整理占位实现。
+- `service.py`：`ConvertService`，负责完整转换流程。
+- `types.py`：上传元信息、选项和结果数据类型。
+- `markdown_normalizer.py`：文本 LLM 二次整理占位实现。
 
-`ConversionService.convert(...)` 是未来同步和异步共用的核心入口。
+`ConvertService.convert(...)` 是未来同步和异步共用的核心入口。
 
 ### `adapters`
 
@@ -120,13 +112,13 @@ HTTP API 层。
 当前同步路径：
 
 ```text
-FastAPI route -> ConversionService.convert(...) -> ConvertResponse
+FastAPI route -> ConvertService.convert(...) -> ConvertResponse
 ```
 
 未来异步路径可以变成：
 
 ```text
-FastAPI route -> 创建 task_id -> worker 调用 ConversionService.convert(...) -> 存储结果
+FastAPI route -> 创建 task_id -> worker 调用 ConvertService.convert(...) -> 存储结果
 ```
 
 这样异步化时主要增加任务状态和结果存储，不需要重写转换核心。
