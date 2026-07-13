@@ -13,7 +13,7 @@ venv/
 .idea/
 .DS_Store
 
-# Runtime files and generated demo outputs
+# Runtime files and generated test outputs
 *.log
 .runtime/
-test_files/output/
+tests/test_files/output/
