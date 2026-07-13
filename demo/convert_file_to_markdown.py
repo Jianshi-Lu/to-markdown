@@ -1,3 +1,13 @@
+"""不启动 Web 服务的 MarkItDown + oMLX OCR 排错 demo。
+
+上游：开发者从项目根目录直接执行本文件；生产服务不会 import 本模块。
+下游：本文件直接构造 MarkItDown 和最小 OpenAI-compatible oMLX client，向外部
+oMLX 服务发起 OCR 请求，并把 ``result.markdown`` 写入 ``test_files/output``。
+
+它与 ``adapters.omlx_client`` 使用相同的 tokenizer byte 解码思想，但保留更详细的
+命令行排错信息；不应作为 FastAPI 服务的运行时入口。
+"""
+
 import os
 import socket
 from pathlib import Path
@@ -33,6 +43,15 @@ OUTPUT_FILE = PROJECT_ROOT / "test_files/output/test_img_omlx.md"
 
 
 def bytes_to_unicode() -> dict[int, str]:
+    """构造 byte-level tokenizer 的 byte 到可见字符映射。
+
+    上游：模块导入时构造 ``BYTE_DECODER``。
+    下游：仅使用标准库字符/范围处理。
+
+    Returns:
+        与服务端 ``adapters.omlx_client.bytes_to_unicode()`` 相同语义的映射。
+    """
+
     # 有些 tokenizer 会把原始 byte 映射成一组“可显示”的 Unicode 字符。
     # 这样模型输出时不会直接出现不可见控制字符，但中文可能看起来像乱码，
     # 例如“什么”可能被显示成类似“ä»Ģä¹Ī”的 byte-level 表示。
@@ -61,6 +80,18 @@ BYTE_DECODER = {value: key for key, value in bytes_to_unicode().items()}
 
 
 def decode_tokenizer_bytes(text: str) -> str:
+    """将 oMLX 模型可能返回的 byte-level 表示还原为 UTF-8 文本。
+
+    上游：demo ``DecodingChatCompletions.create()`` 对每个 response choice 调用。
+    下游：``BYTE_DECODER`` 与 ``bytearray.decode('utf-8', errors='replace')``。
+
+    Args:
+        text: response 中原始 ``message.content``。
+
+    Returns:
+        尽可能还原后的文本；非法 byte 序列以替换字符表示。
+    """
+
     # oMLX 只是承载模型推理，不一定会替我们修复模型/tokenizer 的 byte-level 输出。
     # 如果 response 里已经是正常中文，这个函数基本不会改变结果；
     # 如果 response 里出现“ä»Ģä¹Ī...”这类文本，就会按 byte 映射还原成 UTF-8 中文。
@@ -80,6 +111,22 @@ def decode_tokenizer_bytes(text: str) -> str:
 
 
 def assert_omlx_reachable(base_url: str) -> None:
+    """在 demo 转换前确认 oMLX host:port 可建立 TCP 连接。
+
+    上游：模块顶层执行序列在创建 client 前调用。
+    下游：``urlparse()`` 与 ``socket.create_connection(..., timeout=3)``。
+
+    Args:
+        base_url: oMLX 的 OpenAI-compatible base URL。
+
+    Returns:
+        ``None``，仅当 TCP 连接成功时返回。
+
+    Raises:
+        SystemExit: URL 无 hostname 或 socket 连接失败时，携带面向命令行排错的
+            多行提示和原始 socket 错误。
+    """
+
     # MarkItDown 会把底层 HTTP 错误包成 FileConversionException，
     # 直接看 traceback 不容易判断是不是 oMLX 没启动。
     # 所以在真正转换前先做一次 TCP 连接检查：只确认 host:port 是否可连。
@@ -119,6 +166,13 @@ def assert_omlx_reachable(base_url: str) -> None:
 
 
 class DecodingChatCompletions:
+    """为 demo 中的 MarkItDown 提供最小 chat completions 兼容层。
+
+    上游：``OmlxClient.__init__()`` 把实例暴露在 ``client.chat.completions``。
+    下游：OpenAI SDK completions resource、``summarize_messages()`` 和
+    ``decode_tokenizer_bytes()``。返回值只保留 MarkItDown 读取的 choices/message。
+    """
+
     # MarkItDown 的图片 converter 期望调用：
     # client.chat.completions.create(model=..., messages=...)
     #
@@ -126,10 +180,36 @@ class DecodingChatCompletions:
     # 1. 请求实际转发给 oMLX，而不是 OpenAI 云端；
     # 2. 拿到 oMLX 返回内容后，统一做一次 tokenizer byte 输出修复。
     def __init__(self, completions, base_url: str):
+        """保存 SDK resource 与 base URL。
+
+        Args:
+            completions: OpenAI SDK 的 ``chat.completions`` resource。
+            base_url: 用于生成排错信息的 oMLX base URL。
+        """
+
         self._completions = completions
         self._base_url = base_url
 
     def create(self, *args, **kwargs) -> SimpleNamespace:
+        """转发 OCR chat 请求并对返回文本进行 byte 解码。
+
+        上游：MarkItDown 图片 converter 调用
+        ``client.chat.completions.create(model=..., messages=...)``。
+        下游：OpenAI SDK ``create()``；失败时 ``summarize_messages()``，成功时
+        ``decode_tokenizer_bytes()``。
+
+        Args:
+            *args: 透传给 OpenAI SDK 的位置参数。
+            **kwargs: 透传参数，通常包含 ``model`` 和 vision messages。
+
+        Returns:
+            只带 ``choices[*].message.content`` 的 ``SimpleNamespace`` 兼容响应。
+
+        Raises:
+            RuntimeError: SDK 抛出 ``APIConnectionError`` 时，附带 endpoint、模型、
+                message 摘要和提示开发者检查 oMLX 服务端日志。
+        """
+
         try:
             response = self._completions.create(*args, **kwargs)
         except APIConnectionError as exc:
@@ -168,6 +248,18 @@ class DecodingChatCompletions:
 
 
 def summarize_messages(messages: list[dict]) -> str:
+    """按文本和图片 data URI 长度生成安全的消息摘要。
+
+    上游：``DecodingChatCompletions.create()`` 的连接错误处理分支。
+    下游：仅遍历 OpenAI 风格的 message/content 字典。
+
+    Args:
+        messages: chat messages；content 可以是字符串或 text/image_url item 列表。
+
+    Returns:
+        不含实际 base64 内容的逗号分隔摘要字符串。
+    """
+
     # 排错时不要把整张图片的 base64 打到控制台，只输出结构和 data URI 大小。
     parts = []
 
@@ -191,12 +283,29 @@ def summarize_messages(messages: list[dict]) -> str:
 
 
 class OmlxClient:
+    """demo 使用的最小 OpenAI-compatible oMLX client。
+
+    上游：模块顶层创建 ``client``，随后注入 ``MarkItDown(llm_client=client)``。
+    下游：``httpx.Client``、OpenAI SDK 和 ``DecodingChatCompletions``；模型推理由
+    外部 oMLX 进程完成。
+    """
+
     # 这是给 MarkItDown 使用的最小 OpenAI-compatible client。
     # 真实 HTTP 请求由 OpenAI SDK 发给 oMLX：
     #   POST {OMLX_BASE_URL}/chat/completions
     # 所以模型权重、内存占用、Metal/MLX 调度都发生在 oMLX 进程里，
     # 当前 Python 进程只负责把文件交给 MarkItDown，并把 OCR 结果写成 Markdown。
     def __init__(self, base_url: str, api_key: str):
+        """装配供 MarkItDown 使用的 ``client.chat.completions`` 接口。
+
+        Args:
+            base_url: oMLX OpenAI-compatible base URL。
+            api_key: OpenAI SDK 请求携带的 token。
+
+        Side Effects:
+            创建禁用环境代理的 httpx client 和禁用自动重试的 OpenAI SDK client。
+        """
+
         http_client = httpx.Client(trust_env=False)
         openai_client = OpenAI(
             base_url=base_url,
