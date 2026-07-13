@@ -1,4 +1,8 @@
+"""业务异常。"""
+
 class AppError(Exception):
+    """可转换为 HTTP 响应的业务异常。"""
+
     code = "app_error"
     status_code = 500
 
@@ -16,4 +20,3 @@ class OmlxUnavailableError(AppError):
 class UploadTooLargeError(AppError):
     code = "upload_too_large"
     status_code = 413
-

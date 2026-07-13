@@ -1,2 +1,1 @@
-"""External dependency adapters."""
-
+"""外部依赖适配层。"""

@@ -1,20 +1,20 @@
+"""文件转换业务服务。"""
+
 from pathlib import Path
 
 from adapters.markitdown_adapter import MarkItDownAdapter
 from adapters.omlx_client import OmlxClient, assert_omlx_reachable
 from core.config import Settings
-from domain.models import (
-    ConversionOptions,
-    ConversionResult,
-    UploadedFileInfo,
-)
-from services.markdown_normalizer import MarkdownNormalizer
+from convert.markdown_normalizer import MarkdownNormalizer
+from convert.types import ConvertOptions, ConvertResult, UploadedFileInfo
 
 
 IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif", ".tif", ".tiff"}
 
 
-class ConversionService:
+class ConvertService:
+    """编排一次本地文件到 Markdown 的同步转换。"""
+
     def __init__(
         self,
         settings: Settings,
@@ -24,21 +24,22 @@ class ConversionService:
         self._normalizer = normalizer or MarkdownNormalizer()
 
     @classmethod
-    def from_settings(cls, settings: Settings) -> "ConversionService":
+    def from_settings(cls, settings: Settings) -> "ConvertService":
         return cls(settings=settings)
 
     def convert(
         self,
         file_path: Path,
         file_info: UploadedFileInfo,
-        options: ConversionOptions,
-    ) -> ConversionResult:
+        options: ConvertOptions,
+    ) -> ConvertResult:
         warnings: list[str] = []
         likely_uses_ocr = options.enable_ocr and self._is_image(file_info, file_path)
 
         if likely_uses_ocr:
             assert_omlx_reachable(self._settings.omlx_base_url)
 
+        # 建立markitdown依赖实例，包含模型服务omlx
         adapter = self._build_markitdown_adapter(enable_ocr=options.enable_ocr)
         markdown = adapter.convert(file_path)
 
@@ -47,7 +48,7 @@ class ConversionService:
             markdown, normalized, normalizer_warnings = self._normalizer.normalize(markdown)
             warnings.extend(normalizer_warnings)
 
-        return ConversionResult(
+        return ConvertResult(
             markdown=markdown,
             source_filename=file_info.filename,
             content_type=file_info.content_type,

@@ -1,2 +1,1 @@
-"""Core configuration and shared infrastructure."""
-
+"""应用基础设施。"""

@@ -1,3 +1,5 @@
+"""oMLX client 与 OCR 输出解码适配。"""
+
 import socket
 from types import SimpleNamespace
 from urllib.parse import urlparse
@@ -9,6 +11,8 @@ from core.errors import OmlxUnavailableError
 
 
 def bytes_to_unicode() -> dict[int, str]:
+    """构造 GPT-2 byte-level tokenizer 的 byte 到 Unicode 映射。"""
+
     bytes_values = (
         list(range(ord("!"), ord("~") + 1))
         + list(range(ord("¡"), ord("¬") + 1))
@@ -30,6 +34,8 @@ BYTE_DECODER = {value: key for key, value in bytes_to_unicode().items()}
 
 
 def decode_tokenizer_bytes(text: str) -> str:
+    """恢复 byte-level tokenizer 文本，无效 UTF-8 字节使用替换字符。"""
+
     decoded_bytes = bytearray()
 
     for char in text:
@@ -43,6 +49,8 @@ def decode_tokenizer_bytes(text: str) -> str:
 
 
 def assert_omlx_reachable(base_url: str) -> None:
+    """检查 oMLX TCP 端点；不验证鉴权、模型或推理能力。"""
+
     parsed_url = urlparse(base_url)
     host = parsed_url.hostname
     port = parsed_url.port
@@ -69,6 +77,8 @@ def assert_omlx_reachable(base_url: str) -> None:
 
 
 class DecodingChatCompletions:
+    """MarkItDown 所需的最小 ``chat.completions`` 兼容层。"""
+
     def __init__(self, completions, base_url: str):
         self._completions = completions
         self._base_url = base_url
@@ -99,6 +109,8 @@ class DecodingChatCompletions:
 
 
 def summarize_messages(messages: list[dict]) -> str:
+    """生成消息摘要，仅记录图片 data URI 长度。"""
+
     parts = []
 
     for message in messages:
@@ -121,6 +133,8 @@ def summarize_messages(messages: list[dict]) -> str:
 
 
 class OmlxClient:
+    """提供给 MarkItDown 的 OpenAI-compatible client。"""
+
     def __init__(self, base_url: str, api_key: str):
         http_client = httpx.Client(trust_env=False)
         openai_client = OpenAI(
@@ -135,4 +149,3 @@ class OmlxClient:
                 base_url=base_url,
             )
         )
-

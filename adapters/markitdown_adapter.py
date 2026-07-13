@@ -1,3 +1,5 @@
+"""MarkItDown 适配器。"""
+
 from pathlib import Path
 from typing import Any
 
@@ -7,6 +9,8 @@ from core.errors import ConversionError
 
 
 class MarkItDownAdapter:
+    """隔离 MarkItDown 的参数、结果和异常。"""
+
     def __init__(
         self,
         llm_client: Any | None = None,
@@ -30,4 +34,3 @@ class MarkItDownAdapter:
             raise ConversionError(f"MarkItDown conversion failed: {exc}") from exc
 
         return result.markdown
-

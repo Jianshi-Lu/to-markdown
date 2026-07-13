@@ -1,3 +1,5 @@
+"""文件转换响应模型。"""
+
 from pydantic import BaseModel, Field
 
 
@@ -8,14 +10,3 @@ class ConvertResponse(BaseModel):
     used_ocr: bool
     normalized: bool
     warnings: list[str] = Field(default_factory=list)
-
-
-class HealthResponse(BaseModel):
-    status: str
-
-
-class OmlxHealthResponse(BaseModel):
-    status: str
-    base_url: str
-    model: str
-

@@ -1,2 +1,1 @@
-"""HTTP API layer."""
-
+"""HTTP 接口与响应模型。"""

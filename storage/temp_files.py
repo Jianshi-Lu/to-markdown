@@ -1,3 +1,5 @@
+"""上传文件的临时存储。"""
+
 from dataclasses import dataclass
 from pathlib import Path
 from tempfile import NamedTemporaryFile
@@ -18,6 +20,8 @@ class TempUploadedFile:
 
 
 async def save_upload_file(upload_file: UploadFile, settings: Settings) -> TempUploadedFile:
+    """分块保存上传文件，并限制最大体积。"""
+
     settings.temp_dir.mkdir(parents=True, exist_ok=True)
     suffix = Path(upload_file.filename or "").suffix
     max_bytes = settings.max_upload_mb * 1024 * 1024
@@ -39,4 +43,3 @@ async def save_upload_file(upload_file: UploadFile, settings: Settings) -> TempU
             tmp.write(chunk)
 
     return TempUploadedFile(path=path, size_bytes=written)
-

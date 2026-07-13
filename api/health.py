@@ -1,7 +1,9 @@
+"""健康检查接口。"""
+
 from fastapi import APIRouter
 
-from api.schemas import HealthResponse, OmlxHealthResponse
 from adapters.omlx_client import assert_omlx_reachable
+from api.models.health import HealthResponse, OmlxHealthResponse
 from core.config import get_settings
 
 router = APIRouter(tags=["health"])
@@ -12,7 +14,7 @@ async def health() -> HealthResponse:
     return HealthResponse(status="ok")
 
 
-@router.get("/v1/health/omlx", response_model=OmlxHealthResponse)
+@router.get("/health/omlx", response_model=OmlxHealthResponse)
 async def omlx_health() -> OmlxHealthResponse:
     settings = get_settings()
     assert_omlx_reachable(settings.omlx_base_url)
@@ -21,4 +23,3 @@ async def omlx_health() -> OmlxHealthResponse:
         base_url=settings.omlx_base_url,
         model=settings.omlx_model,
     )
-
