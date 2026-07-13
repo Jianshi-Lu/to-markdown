@@ -2,7 +2,7 @@
 
 ## 背景
 
-`to-markdown` 的目标是把文件、PDF、图片转换成 Markdown。第一版服务化目标不是做完整文档美化，而是把已经在 demo 中跑通的链路变成稳定的 HTTP API：
+`to-markdown` 的目标是把文件、PDF、图片转换成 Markdown。服务化目标是把 MarkItDown 与 oMLX 的转换链路封装成稳定的 HTTP API：
 
 ```text
 文件 / PDF / 图片
@@ -38,7 +38,9 @@ POST /convert
   -> api.models.convert.ConvertResponse 返回 Markdown
 ```
 
-第一版接口是同步阻塞的：一次请求等待一次转换完成。内部核心入口是 `ConvertService.convert(...)`，不依赖 FastAPI request，因此未来可以被异步任务 worker 复用。
+接口在 HTTP 语义上是同步的：一次请求等待一次转换完成。`ConvertService.convert(...)` 是同步函数，但路由通过 `run_in_threadpool()` 执行，因此不会直接阻塞 FastAPI 主事件循环。内部核心入口不依赖 FastAPI request，未来仍可被异步任务 worker 复用。
+
+`ConvertService` 在 FastAPI 应用启动时创建一次，并在应用关闭时释放 oMLX/OpenAI SDK 的 HTTP 资源。每次转换只创建请求级的 OCR 调用状态，避免并发请求共享 warning。
 
 ## API
 
@@ -103,3 +105,6 @@ MarkItDown plugin 在服务端固定启用；文件中没有可 OCR 图片时不
 - 页面端 UI。
 
 这些能力后续都可以在当前分层上扩展，不需要改写 MarkItDown/oMLX 的核心适配逻辑。
+
+独立的模型退化排错材料位于
+[`experiments/omlx_ocr_degeneration/`](../../experiments/omlx_ocr_degeneration/)，不属于正式服务运行时路径。

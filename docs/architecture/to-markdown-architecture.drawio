@@ -46,13 +46,13 @@
         <mxCell id="api_health" parent="api_layer" style="fillColor=#FFFFFF;strokeColor=#94A3B8;fontColor=#1E293B;fontSize=13;;rounded=1;whiteSpace=wrap;html=1;" value="&lt;b&gt;health.py&lt;/b&gt;&lt;br&gt;&lt;font style=&#39;font-size:11px&#39;&gt;GET /health  ·  GET /health/omlx(后者调用 assert_omlx_reachable)&lt;/font&gt;" vertex="1">
           <mxGeometry height="160" width="340" x="380" y="50" as="geometry" />
         </mxCell>
-        <mxCell id="api_responses" parent="api_layer" style="fillColor=#FFFFFF;strokeColor=#94A3B8;fontColor=#1E293B;fontSize=13;;rounded=1;whiteSpace=wrap;html=1;" value="&lt;b&gt;models/convert.py · models/health.py&lt;/b&gt;&lt;br&gt;&lt;font style=&#39;font-size:11px&#39;&gt;按功能拆分 ConvertResponse / HealthResponse / OmlxHealthResponse Pydantic 模型&lt;/font&gt;" vertex="1">
+        <mxCell id="api_responses" parent="api_layer" style="fillColor=#FFFFFF;strokeColor=#94A3B8;fontColor=#1E293B;fontSize=13;;rounded=1;whiteSpace=wrap;html=1;" value="&lt;b&gt;models/convert.py · models/health.py&lt;/b&gt;&lt;br&gt;&lt;font style=&#39;font-size:11px&#39;&gt;按功能拆分 ConvertResponse / HealthResponse / OmlxHealthResponse Pydantic 响应模型&lt;/font&gt;" vertex="1">
           <mxGeometry height="160" width="340" x="740" y="50" as="geometry" />
         </mxCell>
         <mxCell id="core_layer" parent="process" style="swimlane;html=1;rounded=1;horizontal=1;startSize=30;fillColor=#F1F5F9;swimlaneFillColor=#E2E8F0;strokeColor=#64748B;fontColor=#0F172A;fontSize=13;" value="&lt;b&gt;core/ · 基础设施(环境变量 / 异常 / 日志)&lt;/b&gt;" vertex="1">
           <mxGeometry height="190" width="1120" x="30" y="370" as="geometry" />
         </mxCell>
-        <mxCell id="core_config" parent="core_layer" style="fillColor=#FFFFFF;strokeColor=#94A3B8;fontColor=#1E293B;fontSize=13;;rounded=1;whiteSpace=wrap;html=1;" value="&lt;b&gt;config.py&lt;/b&gt;&lt;br&gt;&lt;font style=&#39;font-size:11px&#39;&gt;Settings dataclass + get_settings()(lru_cache 缓存) 读取 OMLX_* / TEMP_DIR / MAX_UPLOAD_MB&lt;/font&gt;" vertex="1">
+        <mxCell id="core_config" parent="core_layer" style="fillColor=#FFFFFF;strokeColor=#94A3B8;fontColor=#1E293B;fontSize=13;;rounded=1;whiteSpace=wrap;html=1;" value="&lt;b&gt;config.py&lt;/b&gt;&lt;br&gt;&lt;font style=&#39;font-size:11px&#39;&gt;Settings dataclass + 模块级 SETTINGS 读取 OMLX_* / TEMP_DIR / MAX_UPLOAD_MB&lt;/font&gt;" vertex="1">
           <mxGeometry height="120" width="340" x="20" y="50" as="geometry" />
         </mxCell>
         <mxCell id="core_errors" parent="core_layer" style="fillColor=#FFFFFF;strokeColor=#94A3B8;fontColor=#1E293B;fontSize=13;;rounded=1;whiteSpace=wrap;html=1;" value="&lt;b&gt;errors.py&lt;/b&gt;&lt;br&gt;&lt;font style=&#39;font-size:11px&#39;&gt;AppError 基类与 ConversionError / OmlxUnavailableError / UploadTooLargeError 三个子类&lt;/font&gt;" vertex="1">
@@ -76,13 +76,13 @@
         <mxCell id="services_layer" parent="process" style="swimlane;html=1;rounded=1;horizontal=1;startSize=30;fillColor=#DCFCE7;swimlaneFillColor=#BBF7D0;strokeColor=#16A34A;fontColor=#14532D;fontSize=13;" value="&lt;b&gt;convert/ · 文件转换功能(同步入口,可被 worker 复用)&lt;/b&gt;" vertex="1">
           <mxGeometry height="170" width="1120" x="30" y="820" as="geometry" />
         </mxCell>
-        <mxCell id="svc_conv" parent="services_layer" style="fillColor=#FFFFFF;strokeColor=#94A3B8;fontColor=#1E293B;fontSize=13;;rounded=1;whiteSpace=wrap;html=1;" value="&lt;b&gt;service.py&lt;/b&gt;&lt;br&gt;&lt;font style=&#39;font-size:11px&#39;&gt;ConvertService.convert 编排:构建转换器/OCR client → MarkItDown 按需 OCR → 收集 warning → 固定 OCR cleaner → ConvertResult&lt;/font&gt;" vertex="1">
+        <mxCell id="svc_conv" parent="services_layer" style="fillColor=#FFFFFF;strokeColor=#94A3B8;fontColor=#1E293B;fontSize=13;;rounded=1;whiteSpace=wrap;html=1;" value="&lt;b&gt;service.py&lt;/b&gt;&lt;br&gt;&lt;font style=&#39;font-size:11px&#39;&gt;ConvertService 在启动时复用转换器/OCR client；convert 编排按需 OCR → 收集 warning → 固定 OCR cleaner → ConvertResult&lt;/font&gt;" vertex="1">
           <mxGeometry height="100" width="520" x="20" y="50" as="geometry" />
         </mxCell>
         <mxCell id="svc_norm" parent="services_layer" style="fillColor=#FFFFFF;strokeColor=#94A3B8;fontColor=#1E293B;fontSize=13;;rounded=1;whiteSpace=wrap;html=1;" value="&lt;b&gt;ocr_markdown_cleaner.py&lt;/b&gt;&lt;br&gt;&lt;font style=&#39;font-size:11px&#39;&gt;清理 OCR 边界标记、已知 det 标签和坐标；保留识别文字与普通 Markdown&lt;/font&gt;" vertex="1">
           <mxGeometry height="100" width="520" x="560" y="50" as="geometry" />
         </mxCell>
-        <mxCell id="adapters_layer" parent="process" style="swimlane;html=1;rounded=1;horizontal=1;startSize=30;fillColor=#FFEDD5;swimlaneFillColor=#FED7AA;strokeColor=#EA580C;fontColor=#7C2D12;fontSize=13;" value="&lt;b&gt;integrations/ · 外部依赖隔离(MarkItDown / OpenAI SDK / socket)&lt;/b&gt;" vertex="1">
+        <mxCell id="adapters_layer" parent="process" style="swimlane;html=1;rounded=1;horizontal=1;startSize=30;fillColor=#FFEDD5;swimlaneFillColor=#FED7AA;strokeColor=#EA580C;fontColor=#7C2D12;fontSize=13;" value="&lt;b&gt;integrations/ · 外部依赖集成(MarkItDown / OpenAI SDK / socket)&lt;/b&gt;" vertex="1">
           <mxGeometry height="160" width="1120" x="30" y="1010" as="geometry" />
         </mxCell>
         <mxCell id="ad_mark" parent="adapters_layer" style="fillColor=#FFFFFF;strokeColor=#94A3B8;fontColor=#1E293B;fontSize=13;;rounded=1;whiteSpace=wrap;html=1;" value="&lt;b&gt;markitdown.py&lt;/b&gt;&lt;br&gt;&lt;font style=&#39;font-size:11px&#39;&gt;MarkItDownConverter.convert 调用第三方 MarkItDown,把 Exception 包成 ConversionError&lt;/font&gt;" vertex="1">
@@ -94,13 +94,13 @@
         <mxCell id="e_main_api" edge="1" entryX="0.5" entryY="0" exitX="0.5" exitY="1" parent="process" source="main_box" style="endArrow=block;endFill=1;html=1;rounded=0;strokeColor=#2563EB;strokeWidth=2;fontSize=11;labelBackgroundColor=#F8FAFC;" target="api_convert" value="include_router()">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="e_api_config" edge="1" entryX="0.5" entryY="0" exitX="0" exitY="0.5" parent="process" source="api_convert" style="endArrow=block;endFill=1;html=1;rounded=0;strokeColor=#0F172A;strokeWidth=2;fontSize=11;labelBackgroundColor=#F8FAFC;" target="core_config" value="get_settings()">
+        <mxCell id="e_api_config" edge="1" entryX="0.5" entryY="0" exitX="0" exitY="0.5" parent="process" source="api_convert" style="endArrow=block;endFill=1;html=1;rounded=0;strokeColor=#0F172A;strokeWidth=2;fontSize=11;labelBackgroundColor=#F8FAFC;" target="core_config" value="SETTINGS">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
         <mxCell id="e_api_storage" edge="1" entryX="0.5" entryY="0" exitX="0" exitY="0.7" parent="process" source="api_convert" style="endArrow=block;endFill=1;html=1;rounded=0;strokeColor=#D97706;strokeWidth=2;fontSize=11;labelBackgroundColor=#F8FAFC;" target="storage_temp" value="await save_upload_file()">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="e_api_domain" edge="1" entryX="0" entryY="0.5" exitX="0.5" exitY="1" parent="process" source="api_convert" style="endArrow=block;endFill=1;dashed=1;html=1;rounded=0;strokeColor=#9333EA;strokeWidth=1;fontSize=11;labelBackgroundColor=#F8FAFC;" target="domain_models" value="构造转换参数">
+        <mxCell id="e_api_domain" edge="1" entryX="0" entryY="0.5" exitX="0.5" exitY="1" parent="process" source="api_convert" style="endArrow=block;endFill=1;dashed=1;html=1;rounded=0;strokeColor=#9333EA;strokeWidth=1;fontSize=11;labelBackgroundColor=#F8FAFC;" target="domain_models" value="构造 SourceFile">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
         <mxCell id="e_api_svc" edge="1" entryX="0" entryY="0.5" exitX="0.5" exitY="1" parent="process" source="api_convert" style="endArrow=block;endFill=1;html=1;rounded=0;strokeColor=#16A34A;strokeWidth=2;fontSize=11;labelBackgroundColor=#F8FAFC;" target="svc_conv" value="run_in_threadpool(convert)">
@@ -111,16 +111,16 @@
             </Array>
           </mxGeometry>
         </mxCell>
-        <mxCell id="e_svc_mark" edge="1" entryX="0" entryY="0.5" exitX="0.5" exitY="1" parent="process" source="svc_conv" style="endArrow=block;endFill=1;html=1;rounded=0;strokeColor=#EA580C;strokeWidth=2;fontSize=11;labelBackgroundColor=#F8FAFC;" target="ad_mark" value="_create_markitdown_converter">
+        <mxCell id="e_svc_mark" edge="1" entryX="0" entryY="0.5" exitX="0.5" exitY="1" parent="process" source="svc_conv" style="endArrow=block;endFill=1;html=1;rounded=0;strokeColor=#EA580C;strokeWidth=2;fontSize=11;labelBackgroundColor=#F8FAFC;" target="ad_mark" value="_build_conversion_runtime (启动时)">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
         <mxCell id="e_svc_omlx" edge="1" entryX="0" entryY="0.5" exitX="1" exitY="0.5" parent="process" source="svc_conv" style="endArrow=block;endFill=1;html=1;rounded=0;strokeColor=#DC2626;strokeWidth=2;fontSize=11;labelBackgroundColor=#F8FAFC;" target="ad_omlx" value="OmlxOcrClient（发现图片时调用）">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="e_svc_norm" edge="1" entryX="0" entryY="0.5" exitX="1" exitY="0.6" parent="process" source="svc_conv" style="endArrow=block;endFill=1;dashed=1;html=1;rounded=0;strokeColor=#16A34A;strokeWidth=1;fontSize=11;labelBackgroundColor=#F8FAFC;" target="svc_norm" value="normalize()">
+        <mxCell id="e_svc_norm" edge="1" entryX="0" entryY="0.5" exitX="1" exitY="0.6" parent="process" source="svc_conv" style="endArrow=block;endFill=1;dashed=1;html=1;rounded=0;strokeColor=#16A34A;strokeWidth=1;fontSize=11;labelBackgroundColor=#F8FAFC;" target="svc_norm" value="clean()">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="e_svc_domain" edge="1" entryX="0.5" entryY="1" exitX="0" exitY="0.5" parent="process" source="svc_conv" style="endArrow=block;endFill=1;dashed=1;html=1;rounded=0;strokeColor=#9333EA;strokeWidth=1;fontSize=11;labelBackgroundColor=#F8FAFC;" target="domain_models" value="输入 / 输出模型">
+        <mxCell id="e_svc_domain" edge="1" entryX="0.5" entryY="1" exitX="0" exitY="0.5" parent="process" source="svc_conv" style="endArrow=block;endFill=1;dashed=1;html=1;rounded=0;strokeColor=#9333EA;strokeWidth=1;fontSize=11;labelBackgroundColor=#F8FAFC;" target="domain_models" value="SourceFile / ConvertResult">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
         <mxCell id="e_health_omlx" edge="1" entryX="0.5" entryY="0" exitX="0.5" exitY="1" parent="process" source="api_health" style="endArrow=block;endFill=1;dashed=1;html=1;rounded=0;strokeColor=#DC2626;strokeWidth=1;fontSize=11;labelBackgroundColor=#F8FAFC;" target="ad_omlx" value="assert_omlx_reachable">
@@ -138,7 +138,7 @@
         <mxCell id="ext_fs" parent="1" style="fillColor=#FEF9C3;strokeColor=#CA8A04;fontColor=#713F12;fontSize=15;;rounded=1;whiteSpace=wrap;html=1;" value="&lt;b&gt;TEMP_DIR 文件系统&lt;/b&gt;&lt;br&gt;&lt;font style=&#39;font-size:12px&#39;&gt;默认:&lt;项目根&gt;/.runtime/uploads&lt;br&gt;TEMP_DIR 直接指定最终目录;保存上传副本,请求结束删除&lt;/font&gt;" vertex="1">
           <mxGeometry height="120" width="410" x="1720" y="820" as="geometry" />
         </mxCell>
-        <mxCell id="ext_demo" parent="1" style="fillColor=#F5F3FF;strokeColor=#7C3AED;fontColor=#4C1D95;fontSize=13;;rounded=1;whiteSpace=wrap;html=1;" value="&lt;b&gt;demo/ · 排错 / 学习&lt;/b&gt;&lt;br&gt;&lt;font style=&#39;font-size:12px&#39;&gt;convert_file_to_markdown.py 不进入运行时路径&lt;br&gt;用于单独复现 MarkItDown / oMLX / OCR 行为&lt;/font&gt;" vertex="1">
+        <mxCell id="ext_demo" parent="1" style="fillColor=#F5F3FF;strokeColor=#7C3AED;fontColor=#4C1D95;fontSize=13;;rounded=1;whiteSpace=wrap;html=1;" value="&lt;b&gt;experiments/ · 排错 / 研究&lt;/b&gt;&lt;br&gt;&lt;font style=&#39;font-size:12px&#39;&gt;omlx_ocr_degeneration 不进入运行时路径&lt;br&gt;用于复现和分析 OCR 模型输出退化&lt;/font&gt;" vertex="1">
           <mxGeometry height="110" width="410" x="1720" y="1000" as="geometry" />
         </mxCell>
         <mxCell id="e_mark_ext" edge="1" entryX="0" entryY="0.5" exitX="1" exitY="0.5" parent="1" source="ad_mark" style="endArrow=block;endFill=1;html=1;rounded=0;strokeColor=#DB2777;strokeWidth=2;fontSize=11;labelBackgroundColor=#FFFFFF;" target="ext_markitdown" value="MarkItDown().convert(path)">
@@ -281,7 +281,7 @@
             <mxPoint x="576" y="256" as="targetPoint" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="step_302_2_3" edge="1" parent="1" style="endArrow=block;endFill=1;html=1;rounded=0;strokeColor=#2563EB;strokeWidth=2;fontSize=11;labelBackgroundColor=#FFFFFF;" value="get_settings()  →  Settings(omlx_*, temp_dir, max_upload_mb)">
+        <mxCell id="step_302_2_3" edge="1" parent="1" style="endArrow=block;endFill=1;html=1;rounded=0;strokeColor=#2563EB;strokeWidth=2;fontSize=11;labelBackgroundColor=#FFFFFF;" value="应用导入时读取 SETTINGS(omlx_*, temp_dir, max_upload_mb)">
           <mxGeometry relative="1" as="geometry">
             <mxPoint x="576" y="302" as="sourcePoint" />
             <mxPoint x="784" y="302" as="targetPoint" />
@@ -320,7 +320,7 @@
         <mxCell id="self_526_2" parent="1" style="fillColor=#F8FAFC;strokeColor=#94A3B8;dashed=1;fontColor=#1E293B;fontSize=11;;rounded=1;whiteSpace=wrap;html=1;" value="SourceFile(filename, content_type, size_bytes)" vertex="1">
           <mxGeometry height="26" width="1746" x="594" y="512" as="geometry" />
         </mxCell>
-        <mxCell id="step_566_2_5" edge="1" parent="1" style="endArrow=block;endFill=1;html=1;rounded=0;strokeColor=#2563EB;strokeWidth=2;fontSize=11;labelBackgroundColor=#FFFFFF;" value="ConvertService.from_settings(settings)">
+        <mxCell id="step_566_2_5" edge="1" parent="1" style="endArrow=block;endFill=1;html=1;rounded=0;strokeColor=#2563EB;strokeWidth=2;fontSize=11;labelBackgroundColor=#FFFFFF;" value="应用启动时创建 ConvertService(settings=SETTINGS)">
           <mxGeometry relative="1" as="geometry">
             <mxPoint x="576" y="566" as="sourcePoint" />
             <mxPoint x="1200" y="566" as="targetPoint" />
@@ -368,7 +368,7 @@
             <mxPoint x="1200" y="842" as="targetPoint" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="self_870_5" parent="1" style="fillColor=#F8FAFC;strokeColor=#94A3B8;dashed=1;fontColor=#1E293B;fontSize=11;;rounded=1;whiteSpace=wrap;html=1;" value="_create_markitdown_converter() → MarkItDownConverter + OmlxOcrClient" vertex="1">
+        <mxCell id="self_870_5" parent="1" style="fillColor=#F8FAFC;strokeColor=#94A3B8;dashed=1;fontColor=#1E293B;fontSize=11;;rounded=1;whiteSpace=wrap;html=1;" value="_build_conversion_runtime() → MarkItDownConverter + OmlxOcrClient(启动时)" vertex="1">
           <mxGeometry height="26" width="1122" x="1218" y="856" as="geometry" />
         </mxCell>
         <mxCell id="step_908_5_7" edge="1" parent="1" style="endArrow=block;endFill=1;html=1;rounded=0;strokeColor=#2563EB;strokeWidth=2;fontSize=11;labelBackgroundColor=#FFFFFF;" value="构造 OmlxOcrClient(base_url, api_key)，此时不联网">
@@ -706,7 +706,7 @@
         <mxCell id="p3_c_9_1" parent="1" style="fillColor=#F8FAFC;strokeColor=#E2E8F0;fontColor=#1E293B;fontSize=11;align=left;verticalAlign=middle;spacingLeft=8;;rounded=1;whiteSpace=wrap;html=1;" value="Settings" vertex="1">
           <mxGeometry height="50" width="240" x="280" y="592" as="geometry" />
         </mxCell>
-        <mxCell id="p3_c_9_2" parent="1" style="fillColor=#F8FAFC;strokeColor=#E2E8F0;fontColor=#1E293B;fontSize=11;align=left;verticalAlign=middle;spacingLeft=8;;rounded=1;whiteSpace=wrap;html=1;" value="不可变 dataclass,保存 omlx_base_url / omlx_api_key / omlx_model / temp_dir / max_upload_mb。" vertex="1">
+        <mxCell id="p3_c_9_2" parent="1" style="fillColor=#F8FAFC;strokeColor=#E2E8F0;fontColor=#1E293B;fontSize=11;align=left;verticalAlign=middle;spacingLeft=8;;rounded=1;whiteSpace=wrap;html=1;" value="不可变 dataclass,保存 omlx_* / temp_dir / max_upload_mb。模块导入时构造 SETTINGS。" vertex="1">
           <mxGeometry height="50" width="600" x="520" y="592" as="geometry" />
         </mxCell>
         <mxCell id="p3_c_9_3" parent="1" style="fillColor=#F8FAFC;strokeColor=#E2E8F0;fontColor=#1E293B;fontSize=11;align=left;verticalAlign=middle;spacingLeft=8;;rounded=1;whiteSpace=wrap;html=1;" value="@dataclass(frozen=True)" vertex="1">
@@ -721,10 +721,10 @@
         <mxCell id="p3_f_10" parent="1" style="fillColor=#F1F5F9;strokeColor=#64748B;fontColor=#64748B;fontSize=12;;rounded=1;whiteSpace=wrap;html=1;" value="&lt;b&gt;core/config.py&lt;/b&gt;" vertex="1">
           <mxGeometry height="50" width="230" x="50" y="642" as="geometry" />
         </mxCell>
-        <mxCell id="p3_c_10_1" parent="1" style="fillColor=#FFFFFF;strokeColor=#E2E8F0;fontColor=#1E293B;fontSize=11;align=left;verticalAlign=middle;spacingLeft=8;;rounded=1;whiteSpace=wrap;html=1;" value="get_settings()" vertex="1">
+        <mxCell id="p3_c_10_1" parent="1" style="fillColor=#FFFFFF;strokeColor=#E2E8F0;fontColor=#1E293B;fontSize=11;align=left;verticalAlign=middle;spacingLeft=8;;rounded=1;whiteSpace=wrap;html=1;" value="SETTINGS" vertex="1">
           <mxGeometry height="50" width="240" x="280" y="642" as="geometry" />
         </mxCell>
-        <mxCell id="p3_c_10_2" parent="1" style="fillColor=#FFFFFF;strokeColor=#E2E8F0;fontColor=#1E293B;fontSize=11;align=left;verticalAlign=middle;spacingLeft=8;;rounded=1;whiteSpace=wrap;html=1;" value="读取环境变量构造 Settings,lru_cache 进程内复用;测试可用 cache_clear 重置。" vertex="1">
+        <mxCell id="p3_c_10_2" parent="1" style="fillColor=#FFFFFF;strokeColor=#E2E8F0;fontColor=#1E293B;fontSize=11;align=left;verticalAlign=middle;spacingLeft=8;;rounded=1;whiteSpace=wrap;html=1;" value="读取环境变量构造 Settings;作为进程级配置快照复用。" vertex="1">
           <mxGeometry height="50" width="600" x="520" y="642" as="geometry" />
         </mxCell>
         <mxCell id="p3_c_10_3" parent="1" style="fillColor=#FFFFFF;strokeColor=#E2E8F0;fontColor=#1E293B;fontSize=11;align=left;verticalAlign=middle;spacingLeft=8;;rounded=1;whiteSpace=wrap;html=1;" value="—" vertex="1">
@@ -904,10 +904,10 @@
         <mxCell id="p3_c_20_1" parent="1" style="fillColor=#FFFFFF;strokeColor=#E2E8F0;fontColor=#1E293B;fontSize=11;align=left;verticalAlign=middle;spacingLeft=8;;rounded=1;whiteSpace=wrap;html=1;" value="ConvertService.__init__" vertex="1">
           <mxGeometry height="50" width="240" x="280" y="1142" as="geometry" />
         </mxCell>
-        <mxCell id="p3_c_20_2" parent="1" style="fillColor=#FFFFFF;strokeColor=#E2E8F0;fontColor=#1E293B;fontSize=11;align=left;verticalAlign=middle;spacingLeft=8;;rounded=1;whiteSpace=wrap;html=1;" value="保存 settings 并装配默认 OCR cleaner(未传入则用 OcrMarkdownCleaner)。" vertex="1">
+        <mxCell id="p3_c_20_2" parent="1" style="fillColor=#FFFFFF;strokeColor=#E2E8F0;fontColor=#1E293B;fontSize=11;align=left;verticalAlign=middle;spacingLeft=8;;rounded=1;whiteSpace=wrap;html=1;" value="保存 settings;装配并持有 MarkItDownConverter、OmlxOcrClient 和默认 OCR cleaner。" vertex="1">
           <mxGeometry height="50" width="600" x="520" y="1142" as="geometry" />
         </mxCell>
-        <mxCell id="p3_c_20_3" parent="1" style="fillColor=#FFFFFF;strokeColor=#E2E8F0;fontColor=#1E293B;fontSize=11;align=left;verticalAlign=middle;spacingLeft=8;;rounded=1;whiteSpace=wrap;html=1;" value="settings: Settings, ocr_cleaner: OcrMarkdownCleaner | None = None" vertex="1">
+        <mxCell id="p3_c_20_3" parent="1" style="fillColor=#FFFFFF;strokeColor=#E2E8F0;fontColor=#1E293B;fontSize=11;align=left;verticalAlign=middle;spacingLeft=8;;rounded=1;whiteSpace=wrap;html=1;" value="settings: Settings, cleaner / converter / client 可注入" vertex="1">
           <mxGeometry height="50" width="520" x="1120" y="1142" as="geometry" />
         </mxCell>
         <mxCell id="p3_c_20_4" parent="1" style="fillColor=#FFFFFF;strokeColor=#E2E8F0;fontColor=#1E293B;fontSize=11;align=left;verticalAlign=middle;spacingLeft=8;;rounded=1;whiteSpace=wrap;html=1;" value="—" vertex="1">
@@ -919,13 +919,13 @@
         <mxCell id="p3_f_21" parent="1" style="fillColor=#DCFCE7;strokeColor=#16A34A;fontColor=#16A34A;fontSize=12;;rounded=1;whiteSpace=wrap;html=1;" value="&lt;b&gt;convert/service.py&lt;/b&gt;" vertex="1">
           <mxGeometry height="50" width="230" x="50" y="1192" as="geometry" />
         </mxCell>
-        <mxCell id="p3_c_21_1" parent="1" style="fillColor=#F8FAFC;strokeColor=#E2E8F0;fontColor=#1E293B;fontSize=11;align=left;verticalAlign=middle;spacingLeft=8;;rounded=1;whiteSpace=wrap;html=1;" value="ConvertService.from_settings" vertex="1">
+        <mxCell id="p3_c_21_1" parent="1" style="fillColor=#F8FAFC;strokeColor=#E2E8F0;fontColor=#1E293B;fontSize=11;align=left;verticalAlign=middle;spacingLeft=8;;rounded=1;whiteSpace=wrap;html=1;" value="FastAPI lifespan" vertex="1">
           <mxGeometry height="50" width="240" x="280" y="1192" as="geometry" />
         </mxCell>
-        <mxCell id="p3_c_21_2" parent="1" style="fillColor=#F8FAFC;strokeColor=#E2E8F0;fontColor=#1E293B;fontSize=11;align=left;verticalAlign=middle;spacingLeft=8;;rounded=1;whiteSpace=wrap;html=1;" value="classmethod:从运行配置创建默认 ConvertService 实例(router 层使用)。" vertex="1">
+        <mxCell id="p3_c_21_2" parent="1" style="fillColor=#F8FAFC;strokeColor=#E2E8F0;fontColor=#1E293B;fontSize=11;align=left;verticalAlign=middle;spacingLeft=8;;rounded=1;whiteSpace=wrap;html=1;" value="应用启动时创建并复用 ConvertService;关闭时调用 close()。" vertex="1">
           <mxGeometry height="50" width="600" x="520" y="1192" as="geometry" />
         </mxCell>
-        <mxCell id="p3_c_21_3" parent="1" style="fillColor=#F8FAFC;strokeColor=#E2E8F0;fontColor=#1E293B;fontSize=11;align=left;verticalAlign=middle;spacingLeft=8;;rounded=1;whiteSpace=wrap;html=1;" value="cls, settings: Settings" vertex="1">
+        <mxCell id="p3_c_21_3" parent="1" style="fillColor=#F8FAFC;strokeColor=#E2E8F0;fontColor=#1E293B;fontSize=11;align=left;verticalAlign=middle;spacingLeft=8;;rounded=1;whiteSpace=wrap;html=1;" value="app.state.convert_service" vertex="1">
           <mxGeometry height="50" width="520" x="1120" y="1192" as="geometry" />
         </mxCell>
         <mxCell id="p3_c_21_4" parent="1" style="fillColor=#F8FAFC;strokeColor=#E2E8F0;fontColor=#1E293B;fontSize=11;align=left;verticalAlign=middle;spacingLeft=8;;rounded=1;whiteSpace=wrap;html=1;" value="ConvertService" vertex="1">
@@ -955,7 +955,7 @@
         <mxCell id="p3_f_23" parent="1" style="fillColor=#DCFCE7;strokeColor=#16A34A;fontColor=#16A34A;fontSize=12;;rounded=1;whiteSpace=wrap;html=1;" value="&lt;b&gt;convert/service.py&lt;/b&gt;" vertex="1">
           <mxGeometry height="50" width="230" x="50" y="1292" as="geometry" />
         </mxCell>
-        <mxCell id="p3_c_23_1" parent="1" style="fillColor=#F8FAFC;strokeColor=#E2E8F0;fontColor=#1E293B;fontSize=11;align=left;verticalAlign=middle;spacingLeft=8;;rounded=1;whiteSpace=wrap;html=1;" value="ConvertService._create_markitdown_converter" vertex="1">
+        <mxCell id="p3_c_23_1" parent="1" style="fillColor=#F8FAFC;strokeColor=#E2E8F0;fontColor=#1E293B;fontSize=11;align=left;verticalAlign=middle;spacingLeft=8;;rounded=1;whiteSpace=wrap;html=1;" value="ConvertService._build_conversion_runtime" vertex="1">
           <mxGeometry height="50" width="240" x="280" y="1292" as="geometry" />
         </mxCell>
         <mxCell id="p3_c_23_2" parent="1" style="fillColor=#F8FAFC;strokeColor=#E2E8F0;fontColor=#1E293B;fontSize=11;align=left;verticalAlign=middle;spacingLeft=8;;rounded=1;whiteSpace=wrap;html=1;" value="固定构造 OmlxOcrClient 并启用 MarkItDown plugin；发现图片时才访问模型。" vertex="1">
