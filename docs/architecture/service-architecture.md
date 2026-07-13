@@ -9,10 +9,11 @@
   -> FastAPI 上传接口
   -> MarkItDown 文件类型路由和基础内容提取
   -> oMLX VLM 补充图片 OCR
+  -> 清理 OCR 协议标记
   -> 输出 Markdown
 ```
 
-文本 LLM 二次整理暂不实现，只保留接口位置。这样可以先验证 Web 服务、文件上传、MarkItDown、oMLX OCR 这条主链路。
+Normalizer 只删除 OCR 模型输出中的协议标记和坐标，保留识别文字与普通 Markdown，不调用文本 LLM 重写内容。
 
 ## 技术选型
 
@@ -28,12 +29,12 @@
 
 ```text
 POST /convert
-  -> api.convert 接收 UploadFile 和表单参数
-  -> storage.temp_files 保存为临时文件
+  -> api.convert 接收 UploadFile
+  -> uploads.temp_uploads 保存为临时文件
   -> convert.service 编排转换
-  -> adapters.markitdown_adapter 调用 MarkItDown
-  -> adapters.omlx_client 作为 MarkItDown 的 llm_client
-  -> convert.markdown_normalizer 第一版跳过
+  -> integrations.markitdown 调用 MarkItDown
+  -> integrations.omlx 作为 MarkItDown 的 llm_client
+  -> convert.ocr_markdown_cleaner 清理 OCR 协议噪声
   -> api.models.convert.ConvertResponse 返回 Markdown
 ```
 
@@ -56,16 +57,14 @@ POST /convert
 字段：
 
 - `file`：上传文件，必填。
-- `enable_ocr`：是否允许图片 OCR，默认 `true`。
-- `normalize_markdown`：是否启用文本 LLM 二次整理，第一版保留参数但不真正整理。
+MarkItDown plugin 在服务端固定启用；文件中没有可 OCR 图片时不会访问 oMLX。
 
 响应字段：
 
 - `markdown`：转换后的 Markdown。
 - `source_filename`：原始文件名。
 - `content_type`：上传文件 Content-Type。
-- `used_ocr`：是否按文件类型推断会使用 OCR。
-- `normalized`：第一版固定为 `false`。
+- `normalized`：本次输出是否清理了 OCR 协议标记。
 - `warnings`：非致命提示。
 
 ## 配置项
@@ -75,6 +74,10 @@ POST /convert
 - `OMLX_BASE_URL`：默认 `http://127.0.0.1:8000/v1`。
 - `OMLX_API_KEY`：默认 `20020228`，作为本地 oMLX 占位 token。
 - `OMLX_MODEL`：默认 `unlimited-ocr-mxfp8-mlx`。
+- `OMLX_OCR_PROMPT`：默认 `Free OCR.`。
+- `OMLX_OCR_MAX_TOKENS`：OCR 最大输出 token，默认 `4096`。
+- `OMLX_OCR_TEMPERATURE`：OCR 采样温度，默认 `0`。
+- `OMLX_OCR_REPETITION_PENALTY`：OCR 重复惩罚，默认 `1.1`。
 - `TEMP_DIR`：临时文件目录，默认项目根目录下的 `.runtime/uploads/`。
 - `MAX_UPLOAD_MB`：上传文件大小限制，默认 `100`。
 
@@ -83,7 +86,7 @@ POST /convert
 服务内部异常统一继承 `AppError`，由 FastAPI exception handler 转成 JSON：
 
 - `ConversionError`：MarkItDown 转换失败。
-- `OmlxUnavailableError`：oMLX 不可连或 chat completions 请求失败。
+- `OmlxUnavailableError`：oMLX 健康检查失败；转换期间的 OCR 调用失败会作为 warning 返回。
 - `UploadTooLargeError`：上传文件超过限制。
 
 第一版不暴露完整 Python traceback 给客户端，避免排错信息噪音太大。
@@ -96,7 +99,7 @@ POST /convert
 - Redis / Celery / 任务队列。
 - 用户系统。
 - 文件长期存储。
-- 文本 LLM 二次整理。
+- 文本 LLM 二次重写。
 - 页面端 UI。
 
 这些能力后续都可以在当前分层上扩展，不需要改写 MarkItDown/oMLX 的核心适配逻辑。

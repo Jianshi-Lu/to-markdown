@@ -1,6 +1,6 @@
 # to-markdown 完整代码参考
 
-> 本文以仓库当前源码为准，覆盖运行时服务、领域模型、外部适配器、临时文件处理、独立 OCR demo 与现有 HTTP 测试样例。它描述的是“现在代码实际做什么”，而不是未来规划。架构层面的设计说明见 [服务架构](architecture/service-architecture.md) 和 [分包架构](architecture/package-architecture.md)。
+> 本文以仓库当前源码为准，覆盖运行时服务、共享类型、第三方集成、上传临时文件处理、独立 OCR demo 与现有 HTTP 测试样例。它描述的是“现在代码实际做什么”，而不是未来规划。架构层面的设计说明见 [服务架构](architecture/service-architecture.md) 和 [分包架构](architecture/package-architecture.md)。
 
 ## 1. 阅读范围与约定
 
@@ -11,19 +11,19 @@
 | 服务入口 | [`main.py`](../main.py) | 创建 FastAPI 应用、注册路由、统一处理 `AppError`。 |
 | HTTP 层 | [`api/convert.py`](../api/convert.py)、[`api/health.py`](../api/health.py)、[`api/models/`](../api/models/) | 接收请求、定义对外响应、调用服务层。 |
 | 核心基础设施 | [`core/config.py`](../core/config.py)、[`core/errors.py`](../core/errors.py)、[`core/logging.py`](../core/logging.py) | 配置、统一异常、日志入口。 |
-| Convert 功能 | [`convert/types.py`](../convert/types.py)、[`convert/service.py`](../convert/service.py)、[`convert/markdown_normalizer.py`](../convert/markdown_normalizer.py) | OCR 判断、转换编排、共享数据类型和 Markdown 整理占位。 |
-| 外部适配器 | [`adapters/markitdown_adapter.py`](../adapters/markitdown_adapter.py)、[`adapters/omlx_client.py`](../adapters/omlx_client.py) | MarkItDown 调用、oMLX OpenAI-compatible client、tokenizer byte 解码。 |
-| 临时存储 | [`storage/temp_files.py`](../storage/temp_files.py) | 上传文件的分块保存、尺寸限制、清理。 |
+| Convert 功能 | [`convert/types.py`](../convert/types.py)、[`convert/service.py`](../convert/service.py)、[`convert/ocr_markdown_cleaner.py`](../convert/ocr_markdown_cleaner.py) | 转换编排、共享数据类型和 OCR 协议标记清理。 |
+| 第三方集成 | [`integrations/markitdown.py`](../integrations/markitdown.py)、[`integrations/omlx.py`](../integrations/omlx.py) | MarkItDown 调用、oMLX OpenAI-compatible client、tokenizer byte 解码。 |
+| 上传临时处理 | [`uploads/temp_uploads.py`](../uploads/temp_uploads.py) | 上传文件的分块保存、尺寸限制、清理。 |
 | 独立排错 demo | [`demo/convert_file_to_markdown.py`](../demo/convert_file_to_markdown.py) | 不启动 Web 服务时验证 MarkItDown + oMLX OCR。 |
 | 手工请求样例 | [`test_main.http`](../test_main.http) | 当前已过期的 HTTP Client 样例，详见第 11 节。 |
 
 每个包还各有一个 `__init__.py`。这些文件目前只包含模块文档字符串，不导出符号、不执行初始化逻辑：
 
 - [`api/__init__.py`](../api/__init__.py)：`"""HTTP API layer."""`
-- [`adapters/__init__.py`](../adapters/__init__.py)：`"""External dependency adapters."""`
+- [`integrations/__init__.py`](../integrations/__init__.py)：`"""第三方服务集成。"""`
 - [`core/__init__.py`](../core/__init__.py)：`"""Application core utilities."""`
 - [`convert/__init__.py`](../convert/__init__.py)：导出 Convert 功能的公开类型与服务。
-- [`storage/__init__.py`](../storage/__init__.py)：`"""Storage helpers."""`
+- [`uploads/__init__.py`](../uploads/__init__.py)：`"""上传文件的临时处理。"""`
 
 ### 1.2 不在本文展开的代码
 
@@ -43,7 +43,7 @@ from convert import ConvertService
 而不是 `from to_markdown.api ...`。在项目根目录启动：
 
 ```bash
-uvicorn main:app --reload
+.venv/bin/python run_server.py --reload
 ```
 
 `uvicorn` 导入根目录的 [`main.py`](../main.py)，读取模块级变量 `app`。这会执行 `app = create_app()`。
@@ -56,13 +56,13 @@ uvicorn main:app --reload
 
 | 依赖 | 在哪里使用 | 当前职责 |
 | --- | --- | --- |
-| `fastapi` | `main.py`、`api/*`、`storage/temp_files.py` | ASGI 应用、路由、表单上传、响应模型注册。 |
+| `fastapi` | `main.py`、`api/*`、`uploads/temp_uploads.py` | ASGI 应用、路由、表单上传、响应模型注册。 |
 | `starlette.concurrency.run_in_threadpool` | `api/convert.py` | 将同步转换过程移出 async 事件循环。 |
 | `pydantic` | `api/models/*.py` | API 响应字段声明、序列化和响应模型校验。 |
-| `markitdown` | `adapters/markitdown_adapter.py`、demo | 文件类型路由和基础 Markdown 转换。 |
-| `openai` | `adapters/omlx_client.py`、demo | OpenAI-compatible HTTP client；请求目标是本地 oMLX，不是 OpenAI 云端。 |
-| `httpx` | `adapters/omlx_client.py`、demo | OpenAI SDK 使用的底层 HTTP client。 |
-| `dataclasses` | `core/config.py`、`convert/types.py`、`storage/temp_files.py` | 不可变配置、Convert 数据类型、临时文件对象。 |
+| `markitdown` | `integrations/markitdown.py`、demo | 文件类型路由和基础 Markdown 转换。 |
+| `openai` | `integrations/omlx.py`、demo | OpenAI-compatible HTTP client；请求目标是本地 oMLX，不是 OpenAI 云端。 |
+| `httpx` | `integrations/omlx.py`、demo | OpenAI SDK 使用的底层 HTTP client。 |
+| `dataclasses` | `core/config.py`、`convert/types.py`、`uploads/temp_uploads.py` | 不可变配置、Convert 数据类型、临时文件对象。 |
 | `pathlib`、`tempfile`、`socket`、`urllib.parse`、`types`、`os`、`functools`、`logging` | 多个模块 | 标准库路径、临时文件、TCP 检查、URL 解析、轻量响应对象、环境变量、缓存、日志。 |
 
 ### 2.2 模块依赖方向
@@ -79,16 +79,16 @@ flowchart TB
     ConvertRoute --> Config[core.config]
     ConvertRoute --> Types[convert.types]
     ConvertRoute --> Service[convert.service]
-    ConvertRoute --> Storage[storage.temp_files]
+    ConvertRoute --> Storage[uploads.temp_uploads]
 
     HealthRoute --> HealthResponses[api.models.health]
     HealthRoute --> Config
-    HealthRoute --> Omlx[adapters.omlx_client]
+    HealthRoute --> Omlx[integrations.omlx]
 
     Service --> Config
     Service --> Types
-    Service --> Normalizer[convert.markdown_normalizer]
-    Service --> MdAdapter[adapters.markitdown_adapter]
+    Service --> Cleaner[convert.ocr_markdown_cleaner]
+    Service --> MdAdapter[integrations.markitdown]
     Service --> Omlx
 
     Storage --> Config
@@ -104,10 +104,10 @@ flowchart TB
 
 | 层 | 可依赖的下游 | 不应知道的细节 | 当前实现 |
 | --- | --- | --- | --- |
-| `api` | `core`、`services`、`storage` | MarkItDown 构造参数、OpenAI SDK request 结构 | 路由只创建 Convert 数据类型并调用服务。 |
-| `convert` | `core`、`adapters`、同包 types/normalizer | FastAPI `Request`/`UploadFile`、HTTP JSON 序列化 | `ConvertService` 是同步核心入口。 |
-| `adapters` | `core.errors`、第三方 SDK/服务 | FastAPI 细节和 API schema | 将外部异常/返回值适配为项目内部约定。 |
-| `storage` | `core` | MarkItDown/oMLX | 将上传流变成临时文件路径。 |
+| `api` | `core`、`convert`、`uploads` | MarkItDown 构造参数、OpenAI SDK request 结构 | 路由只创建 Convert 数据类型并调用服务。 |
+| `convert` | `core`、`integrations`、同包 types/OCR cleaner | FastAPI `Request`/`UploadFile`、HTTP JSON 序列化 | `ConvertService` 是同步核心入口。 |
+| `integrations` | `core.errors`、第三方 SDK/服务 | FastAPI 细节和 API schema | 将外部异常/返回值适配为项目内部约定。 |
+| `uploads` | `core` | MarkItDown/oMLX | 将上传流变成临时文件路径。 |
 | `core` | 标准库 | 上层业务 | 设置、异常、日志基础入口。 |
 
 ## 3. 对外 HTTP 合约
@@ -128,9 +128,7 @@ flowchart TB
 
 | 字段 | Python 类型 | FastAPI 声明 | 必填 | 默认值 | 去向 |
 | --- | --- | --- | --- | --- |
-| `file` | `UploadFile` | `File(...)` | 是 | 无 | `save_upload_file()`，然后构造成 `UploadedFileInfo`。 |
-| `enable_ocr` | `bool` | `Form(True)` | 否 | `true` | 构造成 `ConvertOptions.enable_ocr`。 |
-| `normalize_markdown` | `bool` | `Form(False)` | 否 | `false` | 构造成 `ConvertOptions.normalize_markdown`。 |
+| `file` | `UploadFile` | `File(...)` | 是 | 无 | `save_upload_file()`，然后构造成 `SourceFile`。 |
 
 ### 3.3 `ConvertResponse` 响应字段
 
@@ -139,11 +137,10 @@ flowchart TB
 | JSON 字段 | 类型 | 值来源 | 语义 |
 | --- | --- | --- | --- |
 | `markdown` | `string` | `ConvertResult.markdown` | MarkItDown 输出；偏内容和结构提取，不保证一定是美化后的 Markdown。 |
-| `source_filename` | `string` | `UploadedFileInfo.filename` | 客户端原文件名；若 `UploadFile.filename` 为空则降级为临时文件名。 |
+| `source_filename` | `string` | `SourceFile.filename` | 客户端原文件名；若 `UploadFile.filename` 为空则降级为临时文件名。 |
 | `content_type` | `string \| null` | `UploadFile.content_type` | 客户端声明的 MIME type，未二次验证。 |
-| `used_ocr` | `boolean` | `likely_uses_ocr` | `enable_ocr=true` 且文件被识别为图片时为真；详见第 7.3 节。 |
-| `normalized` | `boolean` | normalizer 返回值 | v1 始终为 `false`。 |
-| `warnings` | `string[]` | 服务层累积 | v1 只有在请求 `normalize_markdown=true` 时添加占位警告。 |
+| `normalized` | `boolean` | OCR cleaner 返回值 | 是否清理了 OCR 协议标记。 |
+| `warnings` | `string[]` | 服务层累积 | 包含 OCR 模型调用失败和 OCR cleaner 的非致命提示。 |
 
 ### 3.4 统一业务错误 JSON
 
@@ -159,8 +156,8 @@ flowchart TB
 | 异常类 | 典型产生位置 | HTTP 状态 | `error` | 说明 |
 | --- | --- | --- | --- | --- |
 | `UploadTooLargeError` | `save_upload_file()` | `413` | `upload_too_large` | 上传累计字节数严格大于 `MAX_UPLOAD_MB`。 |
-| `OmlxUnavailableError` | 转换前 TCP 检查或 oMLX wrapper | `503` 或被后续包装为 `422` | `omlx_unavailable` 或 `conversion_failed` | 见第 10.2 节的异常传播差异。 |
-| `ConversionError` | `MarkItDownAdapter.convert()` | `422` | `conversion_failed` | 将任何 `MarkItDown.convert()` 期间的 `Exception` 包装。 |
+| `OmlxUnavailableError` | oMLX 健康检查或 oMLX wrapper | 健康检查为 `503`；转换期间由 plugin 捕获 | `omlx_unavailable` 或转换响应 warning | 见第 10.2 节。 |
+| `ConversionError` | `MarkItDownConverter.convert()` | `422` | `conversion_failed` | 将任何 `MarkItDown.convert()` 期间的 `Exception` 包装。 |
 | 非 `AppError` 异常 | 任意代码 | FastAPI 默认行为 | 无项目统一结构保证 | 例如配置中的非整数 `MAX_UPLOAD_MB`。 |
 
 ## 4. 完整请求生命周期
@@ -173,27 +170,24 @@ sequenceDiagram
     participant R as convert_file
     participant S as save_upload_file
     participant CS as ConvertService
-    participant M as MarkItDownAdapter
-    participant O as OmlxClient/oMLX
+    participant M as MarkItDownConverter
+    participant O as OmlxOcrClient/oMLX
 
     C->>R: POST /convert (multipart)
     R->>S: await save_upload_file(file, settings)
     S-->>R: TempUploadedFile(path, size_bytes)
-    R->>R: 创建 UploadedFileInfo + ConvertOptions
-    R->>CS: 线程池中调用 convert(path, info, options)
-    alt enable_ocr 且被判断为图片
-        CS->>O: assert_omlx_reachable(base_url)
-        O-->>CS: TCP 可连接
-    end
-    CS->>M: adapter.convert(path)
+    R->>R: 创建 SourceFile
+    R->>CS: 线程池中调用 convert(path, info)
+    CS->>M: markitdown_converter.convert(path)
     alt MarkItDown 图片 converter 需要 LLM/OCR
         M->>O: client.chat.completions.create(...)
         O-->>M: 解码后的 choices[0].message.content
+    else 文件中没有可 OCR 图片
+        M-->>M: 只转换原生内容，不连接 oMLX
     end
     M-->>CS: markdown 字符串
-    opt normalize_markdown=true
-        CS->>CS: MarkdownNormalizer.normalize(markdown)
-    end
+    CS->>CS: 将 oMLX 调用状态中的错误加入 warnings
+    CS->>CS: OcrMarkdownCleaner.clean(markdown)
     CS-->>R: ConvertResult
     R->>S: finally: TempUploadedFile.cleanup()
     R-->>C: ConvertResponse JSON
@@ -204,9 +198,8 @@ sequenceDiagram
 | 阶段 | 输入类型 | 构造/返回类型 | 生产者 | 消费者 |
 | --- | --- | --- | --- | --- |
 | HTTP 上传 | `fastapi.UploadFile` | `TempUploadedFile` | `save_upload_file()` | `convert_file()`。 |
-| 请求元信息 | `UploadFile` + `TempUploadedFile` | `UploadedFileInfo` | `convert_file()` | `ConvertService.convert()`。 |
-| 请求选项 | 表单布尔值 | `ConvertOptions` | `convert_file()` | `ConvertService.convert()`。 |
-| 转换主结果 | `Path` + 两个 Convert 数据类型 | `ConvertResult` | `ConvertService.convert()` | `convert_file()`。 |
+| 请求元信息 | `UploadFile` + `TempUploadedFile` | `SourceFile` | `convert_file()` | `ConvertService.convert()`。 |
+| 转换主结果 | `Path` + `SourceFile` | `ConvertResult` | `ConvertService.convert()` | `convert_file()`。 |
 | HTTP 响应 | `ConvertResult` | `ConvertResponse` | `convert_file()` | FastAPI/Pydantic 序列化。 |
 
 ### 4.3 线程模型
@@ -263,7 +256,7 @@ sequenceDiagram
 
 #### 模块职责
 
-按功能定义 HTTP 响应模型。当前请求由 FastAPI 的 `UploadFile` 与 `Form(...)` 参数直接表达。
+按功能定义 HTTP 响应模型。当前请求只由 FastAPI 的 `UploadFile` 参数表达。
 
 #### `ConvertResponse(BaseModel)`
 
@@ -274,7 +267,6 @@ sequenceDiagram
 | `markdown` | `str` | 无 | `ConvertResult.markdown` | JSON `markdown`。 |
 | `source_filename` | `str` | 无 | `ConvertResult.source_filename` | JSON `source_filename`。 |
 | `content_type` | `str \| None` | `None` | `ConvertResult.content_type` | JSON `content_type`。 |
-| `used_ocr` | `bool` | 无 | `ConvertResult.used_ocr` | JSON `used_ocr`。 |
 | `normalized` | `bool` | 无 | `ConvertResult.normalized` | JSON `normalized`。 |
 | `warnings` | `list[str]` | `Field(default_factory=list)` | `ConvertResult.warnings` | JSON `warnings`。 |
 
@@ -302,14 +294,14 @@ sequenceDiagram
 
 ```text
 FastAPI multipart 请求
-  -> UploadFile / Form 参数
-  -> TempUploadedFile + UploadedFileInfo + ConvertOptions
+  -> UploadFile
+  -> TempUploadedFile + SourceFile
   -> ConvertService.convert(...)
   -> ConvertResult
   -> ConvertResponse JSON
 ```
 
-它的上游是 FastAPI 路由分发和 [`main.py`](../main.py) 的 `convert_router` 注册；下游是 `core.config`、`storage.temp_files`、`convert` 与 `api.models.convert`。
+它的上游是 FastAPI 路由分发和 [`main.py`](../main.py) 的 `convert_router` 注册；下游是 `core.config`、`uploads.temp_uploads`、`convert` 与 `api.models.convert`。
 
 #### 模块级 `router = APIRouter(tags=["convert"])`
 
@@ -324,8 +316,6 @@ FastAPI multipart 请求
 ```python
 async def convert_file(
     file: UploadFile = File(...),
-    enable_ocr: bool = Form(True),
-    normalize_markdown: bool = Form(False),
 ) -> ConvertResponse
 ```
 
@@ -335,12 +325,11 @@ async def convert_file(
 | --- | --- | --- | --- | --- |
 | 1 | 获取进程级配置 | `get_settings()` | 无 | `Settings`。 |
 | 2 | 异步落盘上传内容 | `await save_upload_file(file, settings)` | `UploadFile`、`Settings` | `TempUploadedFile(path, size_bytes)`。 |
-| 3 | 构造原始文件元信息 | `UploadedFileInfo(...)` | 原文件名、MIME、临时文件大小 | 给服务层判断文件类别和生成结果元数据。 |
-| 4 | 构造业务选项 | `ConvertOptions(...)` | 两个表单布尔值 | 给服务层决定 OCR/normalizer 分支。 |
-| 5 | 创建服务对象 | `ConvertService.from_settings(settings)` | `Settings` | 一个请求使用一个 `ConvertService` 实例。 |
-| 6 | 执行同步转换 | `await run_in_threadpool(service.convert, ...)` | 临时路径、Convert 数据类型、选项 | `ConvertResult`。 |
-| 7 | 无条件清理 | `temp_file.cleanup()` | 临时文件对象 | 删除请求临时文件。 |
-| 8 | 映射 HTTP 响应 | `ConvertResponse(...)` | `ConvertResult` 各字段 | FastAPI JSON 响应。 |
+| 3 | 构造原始文件元信息 | `SourceFile(...)` | 原文件名、MIME、临时文件大小 | 给服务层判断文件类别和生成结果元数据。 |
+| 4 | 创建服务对象 | `ConvertService.from_settings(settings)` | `Settings` | 一个请求使用一个 `ConvertService` 实例。 |
+| 5 | 执行同步转换 | `await run_in_threadpool(service.convert, ...)` | 临时路径、`SourceFile` | `ConvertResult`。 |
+| 6 | 无条件清理 | `temp_file.cleanup()` | 临时文件对象 | 删除请求临时文件。 |
+| 7 | 映射 HTTP 响应 | `ConvertResponse(...)` | `ConvertResult` 各字段 | FastAPI JSON 响应。 |
 
 **`try/finally` 边界**：
 
@@ -392,26 +381,15 @@ async def convert_file(
 
 Convert 数据类型不依赖 FastAPI、Pydantic、MarkItDown 或 OpenAI SDK。所有显式定义的 dataclass 都使用 `@dataclass(frozen=True)`：初始化后不能给字段重新赋值；dataclasses 仍会生成常规 `__init__`、`__repr__` 和值比较 `__eq__`。
 
-#### `UploadedFileInfo`
+#### `SourceFile`
 
 来源：[`convert/types.py:6`](../convert/types.py#L6)。
 
 | 字段 | 类型 | 构造者 | 消费者 | 说明 |
 | --- | --- | --- | --- | --- |
 | `filename` | `str` | `convert_file()` | `ConvertService.convert()`、最终 `ConvertResult` | 优先原始上传文件名。 |
-| `content_type` | `str \| None` | `convert_file()` | `_is_image()`、最终结果 | 来自客户端 MIME 声明。 |
+| `content_type` | `str \| None` | `convert_file()` | 最终结果 | 来自客户端 MIME 声明。 |
 | `size_bytes` | `int` | `save_upload_file()` 返回的字节数 | 当前服务层不使用 | 保留给审计、限制、结果扩展。 |
-
-#### `ConvertOptions`
-
-来源：[`convert/types.py:15`](../convert/types.py#L15)。
-
-| 字段 | 类型 | 默认值 | 构造者 | 消费者 |
-| --- | --- | --- | --- | --- |
-| `enable_ocr` | `bool` | `True` | HTTP 表单路由 | `ConvertService.convert()`、`_build_markitdown_adapter()`。 |
-| `normalize_markdown` | `bool` | `False` | HTTP 表单路由 | `ConvertService.convert()`。 |
-
-默认值只对调用 `ConvertOptions()` 而不传值的代码有效。HTTP 层自身也为两个表单字段定义了相同默认值。
 
 #### `ConvertResult`
 
@@ -420,10 +398,9 @@ Convert 数据类型不依赖 FastAPI、Pydantic、MarkItDown 或 OpenAI SDK。�
 | 字段 | 类型 | 生产者 | 消费者 |
 | --- | --- | --- | --- |
 | `markdown` | `str` | `ConvertService.convert()` | `ConvertResponse.markdown`。 |
-| `source_filename` | `str` | 由 `UploadedFileInfo.filename` 复制 | `ConvertResponse.source_filename`。 |
-| `content_type` | `str \| None` | 由 `UploadedFileInfo.content_type` 复制 | `ConvertResponse.content_type`。 |
-| `used_ocr` | `bool` | `likely_uses_ocr` | `ConvertResponse.used_ocr`。 |
-| `normalized` | `bool` | normalizer 返回值或默认 `False` | `ConvertResponse.normalized`。 |
+| `source_filename` | `str` | 由 `SourceFile.filename` 复制 | `ConvertResponse.source_filename`。 |
+| `content_type` | `str \| None` | 由 `SourceFile.content_type` 复制 | `ConvertResponse.content_type`。 |
+| `normalized` | `bool` | OCR cleaner 返回值 | `ConvertResponse.normalized`。 |
 | `warnings` | `list[str]` | 服务层本地列表 | `ConvertResponse.warnings`。 |
 
 `warnings` 虽然是 frozen dataclass 的字段，但列表内容本身仍可变；当前代码只在构造前通过 `warnings.extend(...)` 修改它。
@@ -436,9 +413,13 @@ Convert 数据类型不依赖 FastAPI、Pydantic、MarkItDown 或 OpenAI SDK。�
 
 | 字段 | 类型 | 环境变量 | 默认值 | 消费者 |
 | --- | --- | --- | --- | --- |
-| `omlx_base_url` | `str` | `OMLX_BASE_URL` | `http://127.0.0.1:8000/v1` | `OmlxClient`、`assert_omlx_reachable()`、oMLX health 响应。 |
-| `omlx_api_key` | `str` | `OMLX_API_KEY` | `20020228` | `OmlxClient`。 |
-| `omlx_model` | `str` | `OMLX_MODEL` | `unlimited-ocr-mxfp8-mlx` | `MarkItDownAdapter` 的 `llm_model`、health 响应。 |
+| `omlx_base_url` | `str` | `OMLX_BASE_URL` | `http://127.0.0.1:8000/v1` | `OmlxOcrClient`、`assert_omlx_reachable()`、oMLX health 响应。 |
+| `omlx_api_key` | `str` | `OMLX_API_KEY` | `20020228` | `OmlxOcrClient`。 |
+| `omlx_model` | `str` | `OMLX_MODEL` | `unlimited-ocr-mxfp8-mlx` | `MarkItDownConverter` 的 `llm_model`、health 响应。 |
+| `omlx_ocr_prompt` | `str` | `OMLX_OCR_PROMPT` | `Free OCR.` | `MarkItDownConverter` 的 `llm_prompt`。 |
+| `omlx_ocr_max_tokens` | `int` | `OMLX_OCR_MAX_TOKENS` | `4096` | oMLX OCR 请求的输出上限。 |
+| `omlx_ocr_temperature` | `float` | `OMLX_OCR_TEMPERATURE` | `0` | oMLX OCR 请求的采样温度。 |
+| `omlx_ocr_repetition_penalty` | `float` | `OMLX_OCR_REPETITION_PENALTY` | `1.1` | 防止 OCR 模型陷入单 token 循环。 |
 | `temp_dir` | `Path` | `TEMP_DIR` | `<项目根目录>/.runtime/uploads` | `save_upload_file()`。 |
 | `max_upload_mb` | `int` | `MAX_UPLOAD_MB` | `100` | `save_upload_file()`。 |
 
@@ -453,7 +434,7 @@ Convert 数据类型不依赖 FastAPI、Pydantic、MarkItDown 或 OpenAI SDK。�
 | 下游 | `os.getenv()`、`Path(...)`、`Settings(...)`。 |
 | 返回 | 首次调用时读取环境变量并构造 `Settings`，后续调用返回同一缓存结果。 |
 | 重要行为 | 进程启动后再修改环境变量不会自动反映到已缓存的设置；测试或运行时重载需要显式 `get_settings.cache_clear()` 才会重新读取。 |
-| 失败 | `MAX_UPLOAD_MB` 不是整数字符串时 `int(...)` 抛 `ValueError`；这不是 `AppError`。 |
+| 失败 | 整数或浮点配置无法解析时抛 `ValueError`；这不是 `AppError`。 |
 
 ### 6.3 [`core/errors.py`](../core/errors.py)
 
@@ -472,7 +453,7 @@ Exception
 | 类型 | 来源 | `code` | `status_code` | 主要上游 | 主要下游 |
 | --- | --- | --- | --- | --- | --- |
 | `AppError(Exception)` | [`errors.py:1`](../core/errors.py#L1) | `app_error` | `500` | 抽象统一父类 | `main.handle_app_error()`。 |
-| `ConversionError(AppError)` | [`errors.py:6`](../core/errors.py#L6) | `conversion_failed` | `422` | `MarkItDownAdapter.convert()` | FastAPI 统一 JSON 错误。 |
+| `ConversionError(AppError)` | [`errors.py:6`](../core/errors.py#L6) | `conversion_failed` | `422` | `MarkItDownConverter.convert()` | FastAPI 统一 JSON 错误。 |
 | `OmlxUnavailableError(AppError)` | [`errors.py:11`](../core/errors.py#L11) | `omlx_unavailable` | `503` | oMLX TCP/HTTP wrapper | FastAPI 统一 JSON 错误，或在 MarkItDown 内部被包装。 |
 | `UploadTooLargeError(AppError)` | [`errors.py:16`](../core/errors.py#L16) | `upload_too_large` | `413` | `save_upload_file()` | FastAPI 统一 JSON 错误。 |
 
@@ -491,21 +472,21 @@ Exception
 
 ## 7. 文件保存与业务编排
 
-### 7.1 [`storage/temp_files.py`](../storage/temp_files.py)
+### 7.1 [`uploads/temp_uploads.py`](../uploads/temp_uploads.py)
 
 #### `TempUploadedFile`
 
-来源：[`temp_files.py:12`](../storage/temp_files.py#L12)。请求级临时文件引用，不可变。
+来源：[`temp_uploads.py:12`](../uploads/temp_uploads.py#L12)。请求级临时文件引用，不可变。
 
 | 字段/方法 | 类型或签名 | 上游 | 下游 | 行为 |
 | --- | --- | --- | --- | --- |
 | `path` | `Path` | `NamedTemporaryFile` 路径 | `ConvertService.convert()`、`cleanup()` | 实际落盘文件。 |
-| `size_bytes` | `int` | 分块累计写入量 | `UploadedFileInfo.size_bytes` | 不含额外元数据。 |
+| `size_bytes` | `int` | 分块累计写入量 | `SourceFile.size_bytes` | 不含额外元数据。 |
 | `cleanup()` | `() -> None` | `convert_file()` 的 `finally` | `Path.unlink(missing_ok=True)` | 删除文件；不存在时忽略。 |
 
 #### `save_upload_file(upload_file: UploadFile, settings: Settings) -> TempUploadedFile`
 
-来源：[`temp_files.py:20`](../storage/temp_files.py#L20)。异步读取 FastAPI 上传流并存入临时目录。
+来源：[`temp_uploads.py:20`](../uploads/temp_uploads.py#L20)。异步读取 FastAPI 上传流并存入临时目录。
 
 | 项目 | 说明 |
 | --- | --- |
@@ -531,51 +512,41 @@ Exception
 - 当前函数不调用 `await upload_file.close()`；上传对象的关闭由 FastAPI/请求生命周期处理。
 - 除“超限”分支外，普通磁盘 I/O 异常未转换成 `AppError`。
 
-### 7.2 [`convert/markdown_normalizer.py`](../convert/markdown_normalizer.py)
+### 7.2 [`convert/ocr_markdown_cleaner.py`](../convert/ocr_markdown_cleaner.py)
 
-#### `MarkdownNormalizer`
+#### `OcrMarkdownCleaner`
 
-来源：[`markdown_normalizer.py:3`](../convert/markdown_normalizer.py#L3)。v1 的扩展占位类型。
+来源：[`ocr_markdown_cleaner.py:6`](../convert/ocr_markdown_cleaner.py#L6)。负责保守清理 MarkItDown OCR plugin 输出的协议噪声。
 
-#### `normalize(self, markdown: str) -> tuple[str, bool, list[str]]`
+#### `clean(self, markdown: str) -> tuple[str, bool, list[str]]`
 
-来源：[`markdown_normalizer.py:6`](../convert/markdown_normalizer.py#L6)。
+来源：[`ocr_markdown_cleaner.py:17`](../convert/ocr_markdown_cleaner.py#L17)。
 
 | 项目 | 说明 |
 | --- | --- |
-| 上游调用者 | `ConvertService.convert()`，仅当 `options.normalize_markdown` 为真。 |
+| 上游调用者 | `ConvertService.convert()`，每次文件转换后固定调用。 |
 | 输入 | MarkItDown 输出的 `markdown` 字符串。 |
-| 返回第 1 项 | 原样返回输入 `markdown`。 |
-| 返回第 2 项 | 固定 `False`，表示没有实际规范化。 |
-| 返回第 3 项 | 固定警告列表：`["normalize_markdown is reserved but not implemented in v1."]`。 |
-| 当前边界 | 不调用文本 LLM、不清理标题/列表/表格、不改变内容。 |
+| 返回第 1 项 | 移除 OCR 边界标记、已知 `det` 标签与坐标后的 Markdown。 |
+| 返回第 2 项 | 只有实际更改文本时为 `True`。 |
+| 返回第 3 项 | 当前为空警告列表。 |
+| 当前边界 | `title` 转为一级标题，`text` 和有内容的 `image` 区段保留；不调用 LLM，不全局改写普通 Markdown。 |
 
 ### 7.3 [`convert/service.py`](../convert/service.py)
 
 #### 模块职责
 
-这是同步业务编排核心：它不接触 HTTP request/response，也不保存上传流。输入是已经落盘的 `Path` 和两个 Convert 数据类型，输出是 `ConvertResult`。
+这是同步业务编排核心：它不接触 HTTP request/response，也不保存上传流。输入是已经落盘的 `Path` 和 `SourceFile`，输出是 `ConvertResult`。
 
-#### `IMAGE_SUFFIXES`
-
-来源：[`service.py:12`](../convert/service.py#L12)。
-
-```python
-{ ".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif", ".tif", ".tiff" }
-```
-
-这是 `_is_image()` 在 MIME type 缺失或不以 `image/` 开头时使用的扩展名回退集合。集合元素均为小写，函数会先对后缀调用 `.lower()`。
-
-#### `ConvertService.__init__(self, settings, normalizer=None)`
+#### `ConvertService.__init__(self, settings, ocr_cleaner=None)`
 
 来源：[`service.py:18`](../convert/service.py#L18)。
 
 | 参数 | 类型 | 行为 |
 | --- | --- | --- |
 | `settings` | `Settings` | 保存到 `self._settings`，供 oMLX URL/key/model 读取。 |
-| `normalizer` | `MarkdownNormalizer \| None` | 非空时注入；为空时创建默认 `MarkdownNormalizer()`。 |
+| `ocr_cleaner` | `OcrMarkdownCleaner \| None` | 非空时注入；为空时创建默认 `OcrMarkdownCleaner()`。 |
 
-上游可以用于测试时注入替代 normalizer。当前生产路径总是经 `from_settings()` 使用默认 normalizer。
+上游可以用于测试时注入替代 OCR cleaner。当前生产路径总是经 `from_settings()` 使用默认 OCR cleaner。
 
 #### `ConvertService.from_settings(cls, settings) -> ConvertService`
 
@@ -589,86 +560,57 @@ Exception
 | 输出 | 一个新 `ConvertService`。 |
 | 作用 | 当前只是命名构造器；未来可以集中装配更多依赖。 |
 
-#### `ConvertService.convert(self, file_path, file_info, options) -> ConvertResult`
+#### `ConvertService.convert(self, file_path, source_file) -> ConvertResult`
 
 来源：[`service.py:31`](../convert/service.py#L31)。这是真正由 HTTP 路由放入线程池的同步函数。
 
 | 参数 | 类型 | 来自哪里 | 用于哪里 |
 | --- | --- | --- | --- |
-| `file_path` | `Path` | `TempUploadedFile.path` | 图片识别后缀、MarkItDown `convert`。 |
-| `file_info` | `UploadedFileInfo` | `convert_file()` | MIME 图片判断、返回原始元数据。 |
-| `options` | `ConvertOptions` | `convert_file()` | OCR client 装配与 normalizer 分支。 |
+| `file_path` | `Path` | `TempUploadedFile.path` | MarkItDown `convert`。 |
+| `source_file` | `SourceFile` | `convert_file()` | 返回原始元数据。 |
 
 **函数内部的准确顺序**：
 
 1. 创建局部 `warnings: list[str] = []`。
-2. 计算 `likely_uses_ocr = options.enable_ocr and self._is_image(file_info, file_path)`。
-3. 若 `likely_uses_ocr` 为真，先调用 `assert_omlx_reachable(self._settings.omlx_base_url)`。
-4. 不论文件是否图片，只要 `enable_ocr=True`，都调用 `_build_markitdown_adapter(enable_ocr=True)` 创建带 LLM client 的 adapter；是否真的由 MarkItDown 调用 LLM 取决于其内部文件 converter。
-5. `adapter.convert(file_path)` 得到 Markdown 字符串。
-6. 若 `normalize_markdown=True`，调用 `self._normalizer.normalize(markdown)`，解构为新 markdown、`normalized` 和警告，并将警告追加进本地列表。
-7. 构造并返回 `ConvertResult`。
+2. 调用 `_create_markitdown_converter()`，得到转换器和本次请求的 `OmlxOcrClient`；构造 OCR client 不会访问网络。
+3. `markitdown_converter.convert(file_path)` 得到 Markdown 字符串；只有 plugin 发现可 OCR 图片时才调用 oMLX。
+4. 将 `OmlxOcrClient.call_state.errors` 累积到响应 warnings；没有发生模型调用时该列表为空。
+5. 无条件调用 OCR cleaner 并累积警告。
+6. 构造并返回 `ConvertResult`。
 
-**`used_ocr` 的精确含义**：返回值不是“模型已经成功产生过 OCR 文本”的审计事实，而是第 2 步的 `likely_uses_ocr`。条件为：
-
-```python
-options.enable_ocr and (
-    file_info.content_type.startswith("image/")
-    or file_path.suffix.lower() in IMAGE_SUFFIXES
-)
-```
-
-因此：
-
-- 图片且启用 OCR：`used_ocr=True`，并先做 oMLX TCP 检查。
-- PDF/DOCX 且启用 OCR：`used_ocr=False`，但 adapter 仍然带有 LLM client；MarkItDown 是否对内部图片调用 client 由第三方库决定。
-- 图片但关闭 OCR：`used_ocr=False`，adapter 不带 LLM client。
-
-#### `_build_markitdown_adapter(self, enable_ocr) -> MarkItDownAdapter`
+#### `_create_markitdown_converter(self) -> tuple[MarkItDownConverter, OmlxOcrClient]`
 
 来源：[`service.py:62`](../convert/service.py#L62)。私有装配函数。
 
-| 条件 | 返回的 adapter | 参数传递 | 下游行为 |
-| --- | --- | --- | --- |
-| `enable_ocr=False` | `MarkItDownAdapter()` | 无 LLM 参数 | `MarkItDown()` 使用内置转换器，不具备本项目提供的 oMLX client。 |
-| `enable_ocr=True` | `MarkItDownAdapter(...)` | `llm_client=OmlxClient`、`llm_model=Settings.omlx_model`、`llm_prompt="Free OCR."` | MarkItDown 在需要时可调用 `client.chat.completions.create(...)`。 |
-
-`OmlxClient` 在这个函数内创建，base URL 和 API key 来自 `Settings`。该 client 没有被保存在服务实例字段上；生命周期由 adapter/MarkItDown 持有直至本次转换结束。
-
-#### `_is_image(file_info, file_path) -> bool`
-
-来源：[`service.py:76`](../convert/service.py#L76)，`@staticmethod`，不读取 `self`。
-
-| 优先级 | 判断 | 返回 |
+| 返回值 | 参数传递 | 下游行为 |
 | --- | --- | --- |
-| 1 | `file_info.content_type` 存在且以 `"image/"` 开头 | 立即 `True`。 |
-| 2 | 否则 `file_path.suffix.lower()` 是否在 `IMAGE_SUFFIXES` | 集合成员为 `True`，否则 `False`。 |
+| `(MarkItDownConverter(...), OmlxOcrClient)` | `llm_client=OmlxOcrClient`、model、prompt | MarkItDown 固定加载已安装 plugin，发现图片时才调用 oMLX。 |
 
-上游调用者只有 `ConvertService.convert()`。它不检查文件真实字节内容，也不解析 PDF/DOCX 内嵌图像。
+`OmlxOcrClient` 在这个函数内创建，base URL 和 API key 来自 `Settings`。OCR client 同时返回给 `convert()`，用于在转换后读取本次请求的调用次数和错误；每次转换单独创建，不跨请求共享状态。
 
-## 8. 外部依赖适配器
+## 8. 第三方集成
 
-### 8.1 [`adapters/markitdown_adapter.py`](../adapters/markitdown_adapter.py)
+### 8.1 [`integrations/markitdown.py`](../integrations/markitdown.py)
 
 #### 模块职责
 
 隔离第三方 `markitdown.MarkItDown` 的构造和转换调用，并将其转换阶段的异常统一为项目的 `ConversionError`。
 
-#### `MarkItDownAdapter.__init__(self, llm_client=None, llm_model=None, llm_prompt=None)`
+#### `MarkItDownConverter.__init__(self, llm_client=None, llm_model=None, llm_prompt=None)`
 
-来源：[`markitdown_adapter.py:10`](../adapters/markitdown_adapter.py#L10)。
+来源：[`markitdown.py:10`](../integrations/markitdown.py#L10)。
 
 | 参数 | 类型 | 上游传入者 | 传给第三方的位置 |
 | --- | --- | --- | --- |
-| `llm_client` | `Any \| None` | `ConvertService._build_markitdown_adapter()` | `MarkItDown(llm_client=...)`。 |
+| `llm_client` | `Any \| None` | `ConvertService._create_markitdown_converter()` | `MarkItDown(llm_client=...)`。 |
 | `llm_model` | `str \| None` | 同上 | `MarkItDown(llm_model=...)`。 |
 | `llm_prompt` | `str \| None` | 同上 | `MarkItDown(llm_prompt=...)`。 |
 
-实现先构造空 `kwargs: dict[str, Any]`，只有非 `None` 参数才写入字典，最后执行 `self._markitdown = MarkItDown(**kwargs)`。这保证关闭 OCR 时不是传三个显式 `None`，而是调用无参数 `MarkItDown()`。
+实现固定传递 `enable_plugins=True`；LLM 参数只有非 `None` 时才加入 `kwargs`，最后执行 `MarkItDown(**kwargs)`。
 
-#### `MarkItDownAdapter.convert(self, file_path: Path) -> str`
+#### `MarkItDownConverter.convert(self, file_path: Path) -> str`
 
-来源：[`markitdown_adapter.py:26`](../adapters/markitdown_adapter.py#L26)。
+来源：[`markitdown.py:26`](../integrations/markitdown.py#L26)。
 
 | 项目 | 说明 |
 | --- | --- |
@@ -680,20 +622,20 @@ options.enable_ocr and (
 
 **重要异常边界**：由于 `except Exception` 包围整个 `MarkItDown.convert()`，由 MarkItDown 内部调用 oMLX 时产生的 `OmlxUnavailableError` 也通常会在这里被转成 `ConversionError`。这会影响最终 HTTP 状态，详见第 10.2 节。
 
-### 8.2 [`adapters/omlx_client.py`](../adapters/omlx_client.py)
+### 8.2 [`integrations/omlx.py`](../integrations/omlx.py)
 
 #### 模块职责
 
 该模块提供两类能力：
 
-1. oMLX 服务的 TCP 可达性检查；
-2. 满足 MarkItDown 所需形状的最小 OpenAI client，并在 chat completion 返回后修复 byte-level tokenizer 乱码。
+1. 供健康检查端点使用的 oMLX TCP 可达性检查；
+2. 满足 MarkItDown 所需形状的最小 OpenAI client，记录实际调用状态，并在 chat completion 返回后修复 byte-level tokenizer 乱码。
 
 它不加载 MLX/VLM 模型权重。模型权重、Metal/MLX 调度和服务进程生命周期属于独立 oMLX 服务。
 
 #### `bytes_to_unicode() -> dict[int, str]`
 
-来源：[`omlx_client.py:11`](../adapters/omlx_client.py#L11)。
+来源：[`omlx.py:11`](../integrations/omlx.py#L11)。
 
 | 项目 | 说明 |
 | --- | --- |
@@ -705,7 +647,7 @@ options.enable_ocr and (
 
 #### 模块级 `BYTE_DECODER`
 
-来源：[`omlx_client.py:29`](../adapters/omlx_client.py#L29)。
+来源：[`omlx.py:29`](../integrations/omlx.py#L29)。
 
 ```python
 BYTE_DECODER = {visible_character: original_byte}
@@ -715,11 +657,11 @@ BYTE_DECODER = {visible_character: original_byte}
 
 #### `decode_tokenizer_bytes(text: str) -> str`
 
-来源：[`omlx_client.py:32`](../adapters/omlx_client.py#L32)。
+来源：[`omlx.py:32`](../integrations/omlx.py#L32)。
 
 | 项目 | 说明 |
 | --- | --- |
-| 上游调用者 | `DecodingChatCompletions.create()`，每个 response choice 的 `message.content` 都会经过它。 |
+| 上游调用者 | `OmlxChatCompletions.create()`，每个 response choice 的 `message.content` 都会经过它。 |
 | 输入 | oMLX/OpenAI-compatible 响应中的文本内容。 |
 | 下游 | `BYTE_DECODER.get()`、`bytearray`、`bytes.decode("utf-8", errors="replace")`。 |
 | 输出 | 尝试恢复为正常 UTF-8 文本的字符串。 |
@@ -734,11 +676,11 @@ BYTE_DECODER = {visible_character: original_byte}
 
 #### `assert_omlx_reachable(base_url: str) -> None`
 
-来源：[`omlx_client.py:45`](../adapters/omlx_client.py#L45)。
+来源：[`omlx.py:45`](../integrations/omlx.py#L45)。
 
 | 项目 | 说明 |
 | --- | --- |
-| 上游调用者 | `ConvertService.convert()` 的图片 OCR 预检；`omlx_health()`。 |
+| 上游调用者 | `omlx_health()`；文件转换不再调用该函数。 |
 | 输入 | 例如 `http://127.0.0.1:8000/v1`。 |
 | 下游 | `urlparse()`、`socket.create_connection((host, port), timeout=3)`。 |
 | 成功返回 | `None`。TCP socket 建连成功即返回。 |
@@ -748,46 +690,45 @@ BYTE_DECODER = {visible_character: original_byte}
 
 `urlparse(base_url).port` 对格式非法的端口文本可能抛 `ValueError`，当前实现没有将其包装为 `OmlxUnavailableError`。
 
-#### `DecodingChatCompletions`
+#### `OmlxChatCompletions`
 
-来源：[`omlx_client.py:71`](../adapters/omlx_client.py#L71)。这是一个小型 wrapper，用来伪造 MarkItDown 所期待的 `client.chat.completions.create(...)` 访问路径。
+来源：[`omlx.py:71`](../integrations/omlx.py#L71)。这是一个小型 wrapper，用来伪造 MarkItDown 所期待的 `client.chat.completions.create(...)` 访问路径。
 
-##### `__init__(self, completions, base_url: str)`
+##### `__init__(self, openai_completions, omlx_base_url: str, ocr_call_state: OmlxOcrCallState)`
 
-来源：[`omlx_client.py:72`](../adapters/omlx_client.py#L72)。
+来源：[`omlx.py:72`](../integrations/omlx.py#L72)。
 
 | 字段 | 值 | 来源 | 用途 |
 | --- | --- | --- | --- |
-| `self._completions` | OpenAI SDK 的 chat completions resource | `OmlxClient` | 真正发 HTTP 请求。 |
-| `self._base_url` | oMLX base URL | `OmlxClient` | 组装可读的错误信息。 |
+| `self._openai_completions` | OpenAI SDK 的 chat completions resource | `OmlxOcrClient` | 真正发 HTTP 请求。 |
+| `self._omlx_base_url` | oMLX base URL | `OmlxOcrClient` | 组装可读的错误信息。 |
+| `self._ocr_call_state` | 请求级 `OmlxOcrCallState` | `OmlxOcrClient` | 记录真实请求次数与去重后的错误。 |
 
 ##### `create(self, *args, **kwargs) -> SimpleNamespace`
 
-来源：[`omlx_client.py:76`](../adapters/omlx_client.py#L76)。
+来源：[`omlx.py:76`](../integrations/omlx.py#L76)。
 
 | 项目 | 说明 |
 | --- | --- |
 | 上游调用者 | MarkItDown 图片 converter 通过 `llm_client.chat.completions.create(model=..., messages=...)` 调用。 |
 | 输入 | 透传的 positional/keyword 参数；文档中实际关注 `model` 和 OpenAI vision 形状 `messages`。 |
-| 下游 | `self._completions.create(*args, **kwargs)`、`summarize_messages()`、`decode_tokenizer_bytes()`。 |
-| 成功输出 | `SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=...)), ...])`。当前只保留 MarkItDown 读取所需的 `choices[*].message.content`。 |
+| 下游 | `self._openai_completions.create(*args, **kwargs)`、`summarize_messages()`、`decode_tokenizer_bytes()`。 |
+| 成功输出 | `SimpleNamespace(choices=[SimpleNamespace(message=..., finish_reason=...), ...])`。保留 MarkItDown 所需的文本和结束原因。 |
 | HTTP 目标 | OpenAI SDK 会以 `base_url` 为基础向 `.../chat/completions` 发起请求。 |
 
-**错误处理**：
+**错误处理**：每次 `create()` 先增加请求计数。连接失败和其他请求异常都会写入 `OmlxOcrCallState.errors` 后重新抛出；当前 OCR plugin 会捕获单张图片的异常，因此 `ConvertService` 在转换完成后读取状态并将错误作为 warning 返回。重复错误会去重。
 
-- 只捕获 OpenAI SDK 的 `APIConnectionError`。
-- 捕获后构造 `OmlxUnavailableError`，信息包括 endpoint、`kwargs["model"]`、消息摘要及“TCP 成功但 HTTP 失败”的说明。
-- 其他 SDK 异常、协议错误、response shape 错误不会在这个 wrapper 内统一处理；后续一般会进入 `MarkItDownAdapter.convert()` 的 broad `except Exception`。
+**请求参数**：MarkItDown 未指定生成参数时，wrapper 补充配置中的 `max_tokens`、`temperature` 和 oMLX `repetition_penalty`。显式请求参数优先。
 
-**结果适配**：遍历 `response.choices`，读取 `choice.message.content or ""`，调用 `decode_tokenizer_bytes()`，重新装配轻量 `SimpleNamespace`。原 OpenAI response 上的 usage、finish reason、tool calls 等字段不会保留。
+**结果适配**：遍历 `response.choices`，读取并解码文本。明显的单字符循环会被丢弃并记录 warning；达到 token 上限的非退化输出会保留，同时记录可能不完整的 warning。
 
 #### `summarize_messages(messages: list[dict]) -> str`
 
-来源：[`omlx_client.py:101`](../adapters/omlx_client.py#L101)。
+来源：[`omlx.py:101`](../integrations/omlx.py#L101)。
 
 | 项目 | 说明 |
 | --- | --- |
-| 上游调用者 | `DecodingChatCompletions.create()` 的 `APIConnectionError` 错误信息构造。 |
+| 上游调用者 | `OmlxChatCompletions.create()` 的 `APIConnectionError` 错误信息构造。 |
 | 输入 | OpenAI chat messages 列表。 |
 | 输出 | 逗号分隔摘要，例如 `text(16 chars), image_url(144546 chars)`。 |
 | 目的 | 不在错误文本中输出整张图的 base64，只保留文本/URL 字符数量。 |
@@ -798,33 +739,33 @@ BYTE_DECODER = {visible_character: original_byte}
 - 否则将其视为 iterable；每个 item 的 `type="text"` 统计 `text` 长度，`type="image_url"` 统计 `image_url.url` 长度，其它类型记录类型名。
 - 函数假设非字符串 `content` 的元素支持 `.get()`；不符合 OpenAI vision 约定的结构可能在此抛异常。
 
-#### `OmlxClient`
+#### `OmlxOcrClient`
 
-来源：[`omlx_client.py:123`](../adapters/omlx_client.py#L123)。
+来源：[`omlx.py:123`](../integrations/omlx.py#L123)。
 
-##### `__init__(self, base_url: str, api_key: str)`
+##### `__init__(self, base_url: str, api_key: str, max_tokens: int, temperature: float, repetition_penalty: float)`
 
-来源：[`omlx_client.py:124`](../adapters/omlx_client.py#L124)。
+来源：[`omlx.py:124`](../integrations/omlx.py#L124)。
 
 | 步骤 | 代码行为 | 下游 |
 | --- | --- | --- |
 | 1 | 创建 `httpx.Client(trust_env=False)` | 忽略 `HTTP_PROXY` 等环境代理设置，直接使用 base URL。 |
 | 2 | 创建 `OpenAI(base_url=..., api_key=..., http_client=..., max_retries=0)` | OpenAI SDK 只作协议 client，不代表调用 OpenAI 云端。`max_retries=0` 禁用 SDK 自动重试。 |
-| 3 | 构造 `self.chat = SimpleNamespace(completions=DecodingChatCompletions(...))` | 暴露 MarkItDown 所需的访问路径。 |
+| 3 | 构造 `self.chat = SimpleNamespace(completions=OmlxChatCompletions(...))` | 暴露 MarkItDown 所需的访问路径，并注入 OCR 生成参数。 |
 
-**对上游的接口契约**：`MarkItDownAdapter` 把本对象作为 `llm_client` 传给 `MarkItDown`。MarkItDown 不需要知道它是 oMLX client，只要能调用：
+**对上游的接口契约**：`MarkItDownConverter` 把本对象作为 `llm_client` 传给 `MarkItDown`。MarkItDown 不需要知道它是 oMLX client，只要能调用：
 
 ```python
 client.chat.completions.create(model=..., messages=...)
 ```
 
-**当前生命周期细节**：`ConvertService._build_markitdown_adapter()` 在每次启用 OCR 的转换中创建一个 `OmlxClient`。类中没有 `close()`，也没有显式关闭内部 `httpx.Client` 的代码；该 client 的可达引用随着本次 adapter/MarkItDown 转换结束而消失，但没有显式资源关闭钩子。
+**当前生命周期细节**：`ConvertService._create_markitdown_converter()` 在每次转换中创建一个 `OmlxOcrClient`。类中没有 `close()`，也没有显式关闭内部 `httpx.Client` 的代码；该 OCR client 的可达引用随着本次转换器/MarkItDown 转换结束而消失，但没有显式资源关闭钩子。
 
 ## 9. 独立排错 Demo
 
 ### 9.1 [`demo/convert_file_to_markdown.py`](../demo/convert_file_to_markdown.py) 的定位
 
-该文件不是 Web 服务运行时依赖。`main.py`、`api`、`services` 都不会 import 它。它用于单进程验证：
+该文件不是 Web 服务运行时依赖。`main.py`、`api`、`convert` 都不会 import 它。它用于单进程验证：
 
 ```text
 本地 PNG 文件
@@ -835,30 +776,30 @@ client.chat.completions.create(model=..., messages=...)
   -> 本地 .md 文件
 ```
 
-它与 `adapters/omlx_client.py` 共享同一类核心思路，但错误类型和日志文本更偏人工排错。由于文件**没有** `if __name__ == "__main__":` 保护，直接执行或被 import 时都会从第 215 行开始进行 TCP 检查、调用模型、写文件并打印输出。
+它与 `integrations/omlx.py` 共享同一类核心思路，但错误类型和日志文本更偏人工排错。由于文件**没有** `if __name__ == "__main__":` 保护，直接执行或被 import 时都会从第 215 行开始进行 TCP 检查、调用模型、写文件并打印输出。
 
 ### 9.2 模块级常量
 
 | 常量 | 来源 | 值/默认值 | 下游 |
 | --- | --- | --- | --- |
 | `PROJECT_ROOT` | [`demo:13`](../demo/convert_file_to_markdown.py#L13) | `Path(__file__).resolve().parents[1]` | 输入/输出文件路径。 |
-| `OMLX_BASE_URL` | [`demo:19`](../demo/convert_file_to_markdown.py#L19) | 环境变量或 `http://127.0.0.1:8000/v1` | TCP 检查、`OmlxClient`。 |
-| `OMLX_API_KEY` | [`demo:23`](../demo/convert_file_to_markdown.py#L23) | 环境变量或 `20020228` | `OmlxClient`。 |
+| `OMLX_BASE_URL` | [`demo:19`](../demo/convert_file_to_markdown.py#L19) | 环境变量或 `http://127.0.0.1:8000/v1` | TCP 检查、运行时的 `OmlxOcrClient`。 |
+| `OMLX_API_KEY` | [`demo:23`](../demo/convert_file_to_markdown.py#L23) | 环境变量或 `20020228` | 运行时的 `OmlxOcrClient`。 |
 | `OMLX_MODEL` | [`demo:27`](../demo/convert_file_to_markdown.py#L27) | 环境变量或 `unlimited-ocr-mxfp8-mlx` | `MarkItDown(llm_model=...)`。 |
-| `INPUT_FILE` | [`demo:31`](../demo/convert_file_to_markdown.py#L31) | `test_files/input/test_img.png` | `md.convert(...)`。 |
-| `OUTPUT_FILE` | [`demo:32`](../demo/convert_file_to_markdown.py#L32) | `test_files/output/test_img_omlx.md` | `mkdir()`、`write_text()`。 |
+| `INPUT_FILE` | [`demo:31`](../demo/convert_file_to_markdown.py#L31) | `tests/test_files/input/test_img.png` | `md.convert(...)`。 |
+| `OUTPUT_FILE` | [`demo:32`](../demo/convert_file_to_markdown.py#L32) | `tests/test_files/output/legacy/test_img_omlx.md` | `mkdir()`、`write_text()`。 |
 
 ### 9.3 `bytes_to_unicode()`、`BYTE_DECODER`、`decode_tokenizer_bytes()`
 
 来源分别为 [`demo:35`](../demo/convert_file_to_markdown.py#L35)、[`demo:60`](../demo/convert_file_to_markdown.py#L60)、[`demo:63`](../demo/convert_file_to_markdown.py#L63)。
 
-它们的算法、输入输出和调用关系与服务运行时的 [`adapters/omlx_client.py`](../adapters/omlx_client.py) 对应定义相同：
+它们的算法、输入输出和调用关系与服务运行时的 [`integrations/omlx.py`](../integrations/omlx.py) 对应定义相同：
 
 | Demo 定义 | 服务等价定义 | 作用 |
 | --- | --- | --- |
-| `bytes_to_unicode()` | `adapters.omlx_client.bytes_to_unicode()` | 建立 byte -> 可显示字符映射。 |
-| `BYTE_DECODER` | `adapters.omlx_client.BYTE_DECODER` | 反向查表。 |
-| `decode_tokenizer_bytes(text)` | `adapters.omlx_client.decode_tokenizer_bytes(text)` | 恢复中文等 UTF-8 byte-level 输出。 |
+| `bytes_to_unicode()` | `integrations.omlx.bytes_to_unicode()` | 建立 byte -> 可显示字符映射。 |
+| `BYTE_DECODER` | `integrations.omlx.BYTE_DECODER` | 反向查表。 |
+| `decode_tokenizer_bytes(text)` | `integrations.omlx.decode_tokenizer_bytes(text)` | 恢复中文等 UTF-8 byte-level 输出。 |
 
 差异不在算法，而在注释粒度：demo 用更多行内注释解释乱码成因，运行时代码更紧凑。
 
@@ -866,7 +807,7 @@ client.chat.completions.create(model=..., messages=...)
 
 来源：[`demo:82`](../demo/convert_file_to_markdown.py#L82)。
 
-| 项目 | Demo 行为 | 运行时 adapter 行为 |
+| 项目 | Demo 行为 | 运行时转换器行为 |
 | --- | --- | --- |
 | TCP 检查算法 | `urlparse` + `socket.create_connection(..., timeout=3)` | 相同。 |
 | URL 无 hostname | `raise SystemExit(...)` | `raise OmlxUnavailableError(...)`。 |
@@ -936,29 +877,26 @@ Demo 选择 `SystemExit` 是为了命令行快速停止并给人看清楚的排�
 | `app = create_app()` | `create_app()` | 无 | 创建 app、注册路由/handler。 |
 | `create_app()` | `app.include_router(health_router)` | `APIRouter` | 注册 `/health`、`/health/omlx`。 |
 | `create_app()` | `app.include_router(convert_router)` | `APIRouter` | 注册 `/convert`。 |
-| FastAPI | `convert_file()` | `UploadFile`、表单布尔值 | `ConvertResponse` 或异常。 |
+| FastAPI | `convert_file()` | `UploadFile` | `ConvertResponse` 或异常。 |
 | `convert_file()` | `get_settings()` | 无 | 缓存的 `Settings`。 |
 | `convert_file()` | `save_upload_file()` | `UploadFile`、`Settings` | `TempUploadedFile`。 |
-| `convert_file()` | `UploadedFileInfo(...)` | 文件名/MIME/字节数 | 领域元数据。 |
-| `convert_file()` | `ConvertOptions(...)` | 两个布尔值 | Convert 选项。 |
+| `convert_file()` | `SourceFile(...)` | 文件名/MIME/字节数 | 领域元数据。 |
 | `convert_file()` | `ConvertService.from_settings()` | `Settings` | 服务对象。 |
-| `convert_file()` | `run_in_threadpool(service.convert, ...)` | `Path`、两个 Convert 数据类型 | `ConvertResult`。 |
+| `convert_file()` | `run_in_threadpool(service.convert, ...)` | `Path`、`SourceFile` | `ConvertResult`。 |
 | `convert_file()` | `TempUploadedFile.cleanup()` | 临时路径 | 删除文件。 |
 | FastAPI | `health()` | 无 | `HealthResponse("ok")`。 |
 | FastAPI | `omlx_health()` | 无 | TCP 检查后 `OmlxHealthResponse`。 |
 | `omlx_health()` | `assert_omlx_reachable()` | `Settings.omlx_base_url` | `None` 或 `OmlxUnavailableError`。 |
-| `ConvertService.convert()` | `_is_image()` | `UploadedFileInfo`、`Path` | `bool`。 |
-| `ConvertService.convert()` | `assert_omlx_reachable()` | base URL | 图片 OCR 预检。 |
-| `ConvertService.convert()` | `_build_markitdown_adapter()` | `enable_ocr` | `MarkItDownAdapter`。 |
-| `ConvertService.convert()` | `MarkItDownAdapter.convert()` | 临时文件路径 | `str markdown`。 |
-| `ConvertService.convert()` | `MarkdownNormalizer.normalize()` | Markdown | `(markdown, normalized, warnings)`。 |
-| `_build_markitdown_adapter()` | `OmlxClient(...)` | base URL、API key | 最小 OpenAI-compatible client。 |
-| `_build_markitdown_adapter()` | `MarkItDownAdapter(...)` | client/model/prompt 或空参数 | 外部转换 adapter。 |
-| `MarkItDownAdapter.__init__()` | `MarkItDown(**kwargs)` | LLM 相关可选参数 | 第三方 converter 实例。 |
-| `MarkItDownAdapter.convert()` | `MarkItDown.convert(str(path))` | 本地路径字符串 | 第三方转换结果。 |
-| MarkItDown 图片 converter | `OmlxClient.chat.completions.create()` | `model`、OpenAI vision messages | 轻量 choices response。 |
-| `DecodingChatCompletions.create()` | OpenAI SDK `create()` | 透传参数 | oMLX HTTP 请求。 |
-| `DecodingChatCompletions.create()` | `decode_tokenizer_bytes()` | choice 文本 | 修复后的文本。 |
+| `ConvertService.convert()` | `_create_markitdown_converter()` | 无 | `(MarkItDownConverter, OmlxOcrClient)`。 |
+| `ConvertService.convert()` | `MarkItDownConverter.convert()` | 临时文件路径 | `str markdown`。 |
+| `ConvertService.convert()` | `OcrMarkdownCleaner.clean()` | Markdown | `(markdown, normalized, warnings)`。 |
+| `_create_markitdown_converter()` | `OmlxOcrClient(...)` | base URL、API key、生成参数 | 最小 OpenAI-compatible client。 |
+| `_create_markitdown_converter()` | `MarkItDownConverter(...)` | client/model/prompt 或空参数 | 外部转换器。 |
+| `MarkItDownConverter.__init__()` | `MarkItDown(**kwargs)` | LLM 相关可选参数 | 第三方 converter 实例。 |
+| `MarkItDownConverter.convert()` | `MarkItDown.convert(str(path))` | 本地路径字符串 | 第三方转换结果。 |
+| MarkItDown 图片 converter | `OmlxOcrClient.chat.completions.create()` | `model`、OpenAI vision messages | 轻量 choices response。 |
+| `OmlxChatCompletions.create()` | OpenAI SDK `create()` | model、messages、受控生成参数 | oMLX HTTP 请求。 |
+| `OmlxChatCompletions.create()` | `decode_tokenizer_bytes()` | choice 文本 | 修复后的文本。 |
 | `decode_tokenizer_bytes()` | `BYTE_DECODER` | 每个字符 | 原始 bytes -> UTF-8 文本。 |
 
 ### 10.2 异常在当前代码中的实际路径
@@ -966,13 +904,15 @@ Demo 选择 `SystemExit` 是为了命令行快速停止并给人看清楚的排�
 | 触发条件 | 最先抛出的异常 | 中间处理 | 客户端最终常见结果 |
 | --- | --- | --- | --- |
 | 上传累计大小超过 `MAX_UPLOAD_MB` | `UploadTooLargeError` | 直接到 `main.handle_app_error()` | `413 upload_too_large`。 |
-| 图片 OCR 预检时 oMLX TCP 不可连 | `OmlxUnavailableError` | 发生在 `adapter.convert()` 之前，直接到 `main` handler | `503 omlx_unavailable`。 |
-| oMLX TCP 可连，但 OpenAI SDK 请求产生 `APIConnectionError` | `OmlxUnavailableError`（由 `DecodingChatCompletions.create()` 抛） | 发生在 `MarkItDown.convert()` 内，`MarkItDownAdapter.convert()` 捕获 `Exception` 并包装 | 通常为 `422 conversion_failed`，消息包含 `MarkItDown conversion failed: ...`。 |
-| MarkItDown 文件格式/转换失败 | 第三方异常 | `MarkItDownAdapter.convert()` -> `ConversionError` | `422 conversion_failed`。 |
-| normalizer 占位实现 | 不抛异常 | 返回警告 | `200`，`normalized=false`，有 warning。 |
+| plugin 已启用但文件没有图片 | 不产生异常，也不发起 oMLX 请求 | MarkItDown 只转换原生内容 | `200`，无 oMLX warning。 |
+| plugin 发现图片，但 oMLX 请求失败 | wrapper 记录错误并重新抛出 | OCR plugin 捕获单图异常；服务层转换后读取状态 | `200`，保留普通转换结果并返回 warning。 |
+| `GET /health/omlx` 时 TCP 不可连 | `OmlxUnavailableError` | 直接到 `main` handler | `503 omlx_unavailable`。 |
+| MarkItDown 文件格式/转换失败 | 第三方异常 | `MarkItDownConverter.convert()` -> `ConversionError` | `422 conversion_failed`。 |
+| 输出含已知 OCR 协议标记 | OCR cleaner 确定性清理 | 保留识别文字 | `200`，`normalized=true`。 |
+| OCR 模型陷入明显的单字符循环 | wrapper 丢弃退化 OCR 文本 | 记录 warning，避免污染 Markdown | `200`，保留其它可提取内容。 |
 | 非法 `MAX_UPLOAD_MB` | `ValueError` | 当前未包装 | FastAPI 默认 500 行为。 |
 
-这个表解释了为何“oMLX 相关失败”并不总是得到 `503`：是否在 adapter 的 `try/except Exception` 之内发生，会改变异常类型。
+健康检查失败仍返回 `503`；文件转换中的 OCR 是增强能力，单张图片调用失败不会丢弃已经提取出的原生内容，而是通过 warnings 暴露。
 
 ### 10.3 文件和模型资源生命周期
 
@@ -981,7 +921,7 @@ Demo 选择 `SystemExit` 是为了命令行快速停止并给人看清楚的排�
 | 上传临时文件 | `save_upload_file()` | 服务层/MarkItDown | `convert_file()` 的 `finally` | 请求结束前删除。 |
 | `Settings` | 首次 `get_settings()` | 多个路由与服务 | 进程结束或手动 `cache_clear()` | 缓存于进程。 |
 | `ConvertService` | 每个转换请求 | 本次同步转换 | 函数引用离开作用域 | 无长生命周期状态。 |
-| `OmlxClient` | 每个 `enable_ocr=true` 的转换 | 传给 MarkItDown | 无显式 `close()` | 由本次对象引用生命周期承担。 |
+| `OmlxOcrClient` | 每次转换 | 传给 MarkItDown | 无显式 `close()` | 构造时不联网，由本次对象引用生命周期承担。 |
 | oMLX 模型权重 | 外部 oMLX 进程 | chat completions | oMLX 服务自身停止/卸载策略 | 不在 Python Web 服务进程内。 |
 
 ## 11. 测试资产、文档资产与当前缺口
@@ -1008,23 +948,23 @@ GET http://127.0.0.1:8000/health/omlx
 文件转换请求应使用 multipart form，例如：
 
 ```bash
-curl -X POST http://127.0.0.1:8000/convert \
-  -F "file=@test_files/input/test_img.png" \
-  -F "enable_ocr=true" \
-  -F "normalize_markdown=false"
+curl -X POST http://127.0.0.1:8001/convert \
+  -F "file=@tests/test_files/input/test_img.png"
 ```
 
 上面的命令是文档中的正确调用示例，不会修改现有 `test_main.http`。
 
 ### 11.2 当前自动化测试状态
 
-在已追踪源文件中，没有 `test_*.py`、`pytest` 配置或专用单元测试目录。当前可见的验证材料为：
+当前有 OCR Markdown cleaner 的轻量自动化测试，其他链路仍以手工验证为主：
 
 - `demo/convert_file_to_markdown.py`：直接验证 MarkItDown + oMLX OCR。
-- `test_files/`：人工输入/输出样例目录。
+- `tests/convert.py`：通过实际 HTTP 服务执行固定启用 plugin 的手工转换。
+- `tests/test_ocr_markdown_cleaner.py`：验证 OCR 标记清理和普通 Markdown 保真。
+- `tests/test_files/`：人工输入及持久化输出目录。
 - `test_main.http`：但其端点已经过期。
 
-因此当前服务的关键行为（请求成功、OCR 失败映射、文件大小限制、临时文件清理、normalizer warning）还没有自动化回归测试。
+请求成功、OCR 失败映射、文件大小限制和临时文件清理仍没有自动化回归测试。
 
 ### 11.3 与现有架构文档的关系
 
@@ -1043,7 +983,7 @@ curl -X POST http://127.0.0.1:8000/convert \
 | --- | --- |
 | 新增或修改路由、表单字段、响应字段 | 第 3、5 节。 |
 | 新增领域对象或修改 dataclass 字段 | 第 4.2、6.1 节。 |
-| 修改 OCR 判断、MarkItDown 参数、normalizer 行为 | 第 7.3、8、10 节。 |
+| 修改 OCR 判断、MarkItDown 参数、OCR cleaner 行为 | 第 7.3、8、10 节。 |
 | 修改 oMLX URL、模型名、认证、重试或 client 生命周期 | 第 6.2、8.2、10.3 节。 |
 | 新增对象存储、队列、数据库、文本 LLM | 第 2.3、4、10.3、11.3 节，并补充新模块的逐符号说明。 |
 | 修正/替换 `test_main.http` 或增加 pytest | 第 11 节。 |
@@ -1052,7 +992,7 @@ curl -X POST http://127.0.0.1:8000/convert \
 
 ```bash
 rg -n "^(class |def |async def |@router\\.|@app\\.)" \
-  main.py api core domain services adapters storage demo
+  main.py api core domain convert integrations uploads demo
 ```
 
 若输出中出现本文未列出的定义，或本文描述的符号已经不存在，就需要同步更新本文件。

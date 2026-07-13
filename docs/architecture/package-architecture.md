@@ -6,7 +6,7 @@
 
 - HTTP 层只处理请求和响应。
 - 业务编排集中在 service 层。
-- MarkItDown、oMLX、OpenAI SDK 这类外部依赖放在 adapter 层。
+- MarkItDown、oMLX、OpenAI SDK 这类外部依赖放在集成层。
 - 内部模型不绑定 FastAPI，方便未来复用到异步任务或命令行工具。
 
 ## 目录结构
@@ -26,12 +26,12 @@ core/
 convert/
   service.py
   types.py
-  markdown_normalizer.py
-adapters/
-  markitdown_adapter.py
-  omlx_client.py
-storage/
-  temp_files.py
+  ocr_markdown_cleaner.py
+integrations/
+  markitdown.py
+  omlx.py
+uploads/
+  temp_uploads.py
 ```
 
 根目录就是服务代码根，不再额外套一层 `to_markdown/` 包。`main.py` 是唯一服务入口，直接创建 FastAPI app。
@@ -39,7 +39,7 @@ storage/
 启动方式：
 
 ```bash
-uvicorn main:app --reload
+.venv/bin/python run_server.py --reload
 ```
 
 ## 包职责
@@ -72,21 +72,21 @@ HTTP API 层。
 业务编排层。
 
 - `service.py`：`ConvertService`，负责完整转换流程。
-- `types.py`：上传元信息、选项和结果数据类型。
-- `markdown_normalizer.py`：文本 LLM 二次整理占位实现。
+- `types.py`：源文件元信息和转换结果数据类型。
+- `ocr_markdown_cleaner.py`：清理 OCR 输出的边界标记、检测标签和坐标，不改写普通 Markdown。
 
 `ConvertService.convert(...)` 是未来同步和异步共用的核心入口。
 
-### `adapters`
+### `integrations`
 
-外部依赖适配层。
+第三方服务集成层。
 
-- `markitdown_adapter.py`：
+- `markitdown.py`：
   - 初始化 MarkItDown。
   - 调用 `convert(...)`。
   - 把异常转换成项目自己的 `ConversionError`。
 
-- `omlx_client.py`：
+- `omlx.py`：
   - 用 OpenAI SDK 请求本地 oMLX。
   - 提供 MarkItDown 需要的 `client.chat.completions.create(...)` 形状。
   - 修复部分 OCR 模型返回的 byte-level tokenizer 乱码。
@@ -94,11 +94,11 @@ HTTP API 层。
 
 项目其他层不直接依赖 OpenAI SDK 和 MarkItDown 细节。
 
-### `storage`
+### `uploads`
 
-临时文件存储层。
+上传文件的临时处理层。
 
-- `temp_files.py`：
+- `temp_uploads.py`：
   - 保存 FastAPI 上传文件。
   - 控制临时目录和大小限制。
   - 转换结束后清理临时文件。
@@ -127,4 +127,4 @@ FastAPI route -> 创建 task_id -> worker 调用 ConvertService.convert(...) -> 
 
 `demo/` 保留为排错和学习材料。正式服务代码不依赖 demo 文件。
 
-如果后续 oMLX、MarkItDown 或 OCR 输出出现问题，可以先用 demo 单独复现，再把确认过的修复迁移到 adapter 层。
+如果后续 oMLX、MarkItDown 或 OCR 输出出现问题，可以先用 demo 单独复现，再把确认过的修复迁移到集成层。
