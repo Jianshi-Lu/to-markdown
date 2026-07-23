@@ -10,6 +10,7 @@ from api.health import router as health_router
 from core.config import SETTINGS
 from core.errors import AppError
 from convert import ConvertService
+from integrations.minio import MinioBatchObjectStorage
 
 
 @asynccontextmanager
@@ -18,6 +19,12 @@ async def lifespan(app: FastAPI):
 
     # 启动阶段装配一次，避免每个请求重新初始化 MarkItDown/oMLX client。
     service = ConvertService(settings=SETTINGS)
+    app.state.minio_batch_object_storage = MinioBatchObjectStorage(
+        endpoint=SETTINGS.minio_endpoint,
+        access_key=SETTINGS.minio_access_key,
+        secret_key=SETTINGS.minio_secret_key,
+        bucket=SETTINGS.minio_bucket,
+    )
     app.state.convert_service = service
     try:
         yield
