@@ -18,8 +18,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--port",
         type=int,
-        default=int(os.getenv("SERVER_PORT", "8001")),
-        help="Port to bind (default: SERVER_PORT or 8001).",
+        default=int(os.getenv("SERVER_PORT", "8081")),
+        help="Port to bind (default: SERVER_PORT or 8081).",
     )
     parser.add_argument(
         "--reload",

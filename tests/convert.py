@@ -12,7 +12,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 OUTPUT_DIR = PROJECT_ROOT / "tests" / "test_files" / "output" / "converted"
 OUTPUT_SUFFIX = "_converted"
 CONVERT_URL = (
-    os.getenv("TO_MARKDOWN_BASE_URL", "http://127.0.0.1:8001").rstrip("/")
+    os.getenv("TO_MARKDOWN_BASE_URL", "http://127.0.0.1:8081").rstrip("/")
     + "/convert"
 )
 
