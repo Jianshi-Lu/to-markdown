@@ -7,7 +7,7 @@
 .venv/bin/python run_server.py --reload
 ```
 
-项目服务默认地址为 `http://127.0.0.1:8001`。如果使用其他地址，运行测试脚本前设置 `TO_MARKDOWN_BASE_URL`。
+项目服务默认地址为 `http://127.0.0.1:8081`。如果使用其他地址，运行测试脚本前设置 `TO_MARKDOWN_BASE_URL`。
 
 服务固定启用 MarkItDown plugin；只有文件包含可 OCR 图片时才会访问 oMLX。
 
@@ -48,3 +48,9 @@
 实际输出为 `/path/to/result_converted.md`。
 
 服务会固定清理 OCR 协议标记，无需额外传入开关。
+
+## Postman 批次联调
+
+可导入 [`postman/to-markdown-batch.postman_collection.json`](postman/to-markdown-batch.postman_collection.json)，
+将集合变量 `uploadBatchId` 改为 MinIO 中实际存在的批次 UUID，然后调用批次转换接口。
+详细前置条件见 [`postman/README.md`](postman/README.md)。

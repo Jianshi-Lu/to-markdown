@@ -30,6 +30,7 @@ Normalizer 只删除 OCR 模型输出中的协议标记和坐标，保留识别�
 ```text
 POST /convert
   -> api.convert 接收 UploadFile
+  -> api.dependencies 通过 Depends 获取共享 ConvertService
   -> uploads.temp_uploads 保存为临时文件
   -> convert.service 编排转换
   -> integrations.markitdown 调用 MarkItDown
@@ -40,7 +41,23 @@ POST /convert
 
 接口在 HTTP 语义上是同步的：一次请求等待一次转换完成。`ConvertService.convert(...)` 是同步函数，但路由通过 `run_in_threadpool()` 执行，因此不会直接阻塞 FastAPI 主事件循环。内部核心入口不依赖 FastAPI request，未来仍可被异步任务 worker 复用。
 
-`ConvertService` 在 FastAPI 应用启动时创建一次，并在应用关闭时释放 oMLX/OpenAI SDK 的 HTTP 资源。每次转换只创建请求级的 OCR 调用状态，避免并发请求共享 warning。
+`ConvertService` 在 FastAPI 应用启动时创建一次，并在应用关闭时释放 oMLX/OpenAI SDK 的 HTTP 资源。路由通过 `Depends(get_convert_service)` 获取该实例，而不是自行创建或直接装配服务。每次转换只创建请求级的 OCR 调用状态，避免并发请求共享 warning。
+
+### `POST /convert/batch`
+
+请求体为 JSON：
+
+```json
+{"uploadBatchId":"550e8400-e29b-41d4-a716-446655440000"}
+```
+
+服务通过应用生命周期内复用的 MinIO 读取器列出该批次的
+`{uploadBatchId}/original/` 对象，按 object key 稳定排序；每个对象先流式下载到
+`TEMP_DIR` 下的临时文件，再复用 `ConvertService.convert()` 调用 MarkItDown，转换完成后删除
+临时文件。每个文件转换完成后立即写入同批次的
+`{uploadBatchId}/converted/` 路径；MinIO 以对象前缀表示目录，首次上传时无需额外创建目录。
+Java 不参与原文件读取或 Markdown 回写，只负责触发批次转换。响应仅返回原对象 Key、转换对象
+Key 和 warning，不返回全部 Markdown 内容。
 
 ## API
 
@@ -82,6 +99,15 @@ MarkItDown plugin 在服务端固定启用；文件中没有可 OCR 图片时不
 - `OMLX_OCR_REPETITION_PENALTY`：OCR 重复惩罚，默认 `1.1`。
 - `TEMP_DIR`：临时文件目录，默认项目根目录下的 `.runtime/uploads/`。
 - `MAX_UPLOAD_MB`：上传文件大小限制，默认 `100`。
+- `MINIO_ENDPOINT`：MinIO 服务地址，默认 `http://10.0.0.100:9000`。
+- `MINIO_ACCESS_KEY` / `MINIO_SECRET_KEY`：MinIO 访问凭据。
+- `MINIO_BUCKET`：资信文件 Bucket，默认 `credential-files`。
+
+批次转换需要在当前虚拟环境安装 MinIO Python SDK：
+
+```bash
+.venv/bin/python -m pip install minio
+```
 
 ## 错误处理
 

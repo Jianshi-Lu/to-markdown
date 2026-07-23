@@ -10,6 +10,7 @@ run_server.py
 api/
   convert.py
   health.py
+  dependencies.py
   models/
     convert.py
     health.py
@@ -47,6 +48,7 @@ flowchart TB
     API --> Uploads[uploads]
     API --> Convert[convert]
     API --> Models[api.models]
+    API --> Dependencies[api.dependencies]
     Convert --> Integrations[integrations]
     Convert --> Core
     Uploads --> Core
@@ -57,7 +59,7 @@ flowchart TB
 
 | 层 | 职责 | 不应依赖 |
 | --- | --- | --- |
-| `api` | 接收 HTTP 请求、处理上传、映射响应 | MarkItDown 和 OpenAI SDK 的细节 |
+| `api` | 接收 HTTP 请求、处理上传、通过 `Depends` 获取服务、映射响应 | MarkItDown 和 OpenAI SDK 的细节 |
 | `uploads` | 将上传流分块写入临时目录并清理 | 转换器和 OCR 逻辑 |
 | `convert` | 编排一次文件转换和 OCR 输出清理 | FastAPI 请求对象和 HTTP 序列化 |
 | `integrations` | 适配 MarkItDown、OpenAI-compatible oMLX | FastAPI 路由和 API 响应模型 |
@@ -72,6 +74,7 @@ flowchart TB
 | `GET` | `/health` | `api.health.health()` | 检查 Web 进程是否存活。 |
 | `GET` | `/health/omlx` | `api.health.omlx_health()` | 检查 oMLX TCP 端点是否可达。 |
 | `POST` | `/convert` | `api.convert.convert_file()` | 上传文件并返回 Markdown。 |
+| `POST` | `/convert/batch` | `api.convert.convert_batch()` | 从 MinIO 批次读取原文件，逐个转换并写入 `converted/`。 |
 
 没有根路径 `/`，也没有 `/hello/{name}`。
 
@@ -95,7 +98,30 @@ flowchart TB
 | `normalized` | `boolean` | OCR 清理器是否实际修改了输出。 |
 | `warnings` | `string[]` | OCR 调用失败、模型输出退化等非致命提示。 |
 
-### 3.3 统一错误
+### 3.3 `POST /convert/batch`
+
+请求体只包含批次 UUID：
+
+```json
+{"uploadBatchId":"550e8400-e29b-41d4-a716-446655440000"}
+```
+
+Python 服务自行读取 MinIO 中的：
+
+```text
+{uploadBatchId}/original/
+```
+
+文件按顺序逐个转换，并立即写入同批次的：
+
+```text
+{uploadBatchId}/converted/
+```
+
+MinIO 使用对象前缀表示目录，首次写入时会自动形成 `converted/`，不需要 Java 端创建或回写。
+响应只返回 `originalObjectKey`、`convertedObjectKey` 和 `warnings`，不返回全部 Markdown 内容。
+
+### 3.4 统一错误
 
 `main.py` 将 `AppError` 转换为：
 
@@ -122,7 +148,7 @@ flowchart TB
 
 1. 从进程级 `SETTINGS` 创建一个 `ConvertService`。
 2. `ConvertService` 创建一个 `OmlxOcrClient`、一个 `MarkItDownConverter` 和一个 `OcrMarkdownCleaner`。
-3. 服务对象保存到 `app.state.convert_service`，供每个请求复用。
+3. 服务对象保存到 `app.state.convert_service`，由 `api.dependencies.get_convert_service()` 通过 `Depends` 提供给每个请求复用。
 
 应用关闭时调用 `ConvertService.close()`，释放 oMLX/OpenAI SDK 持有的 HTTP 资源。
 
@@ -142,12 +168,15 @@ uvicorn.run("main:app", ...)
 sequenceDiagram
     participant C as 调用方
     participant R as api.convert
+    participant D as api.dependencies
     participant U as uploads.temp_uploads
     participant S as ConvertService
     participant M as MarkItDownConverter
     participant O as OmlxOcrClient
 
     C->>R: POST /convert
+    R->>D: Depends(get_convert_service)
+    D-->>R: app.state.convert_service
     R->>U: await save_upload_file(file, SETTINGS)
     U-->>R: TempUploadedFile
     R->>R: 构造 SourceFile

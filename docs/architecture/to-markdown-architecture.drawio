@@ -40,13 +40,13 @@
         <mxCell id="api_layer" parent="process" style="swimlane;html=1;rounded=1;horizontal=1;startSize=30;fillColor=#DBEAFE;swimlaneFillColor=#BFDBFE;strokeColor=#2563EB;fontColor=#1E3A8A;fontSize=13;" value="&lt;b&gt;api/ · HTTP 边界(不直接依赖 MarkItDown / OpenAI SDK)&lt;/b&gt;" vertex="1">
           <mxGeometry height="230" width="1120" x="30" y="210" as="geometry" />
         </mxCell>
-        <mxCell id="api_convert" parent="api_layer" style="fillColor=#FFFFFF;strokeColor=#94A3B8;fontColor=#1E293B;fontSize=13;;rounded=1;whiteSpace=wrap;html=1;" value="&lt;b&gt;convert.py&lt;/b&gt;&lt;br&gt;&lt;font style=&#39;font-size:11px&#39;&gt;POST /convert:保存上传文件,构造转换参数,经线程池调用 ConvertService&lt;/font&gt;" vertex="1">
+        <mxCell id="api_convert" parent="api_layer" style="fillColor=#FFFFFF;strokeColor=#94A3B8;fontColor=#1E293B;fontSize=13;;rounded=1;whiteSpace=wrap;html=1;" value="&lt;b&gt;convert.py&lt;/b&gt;&lt;br&gt;&lt;font style=&#39;font-size:11px&#39;&gt;POST /convert:通过 Depends 获取共享 ConvertService,保存上传文件并经线程池执行转换&lt;/font&gt;" vertex="1">
           <mxGeometry height="160" width="340" x="20" y="50" as="geometry" />
         </mxCell>
         <mxCell id="api_health" parent="api_layer" style="fillColor=#FFFFFF;strokeColor=#94A3B8;fontColor=#1E293B;fontSize=13;;rounded=1;whiteSpace=wrap;html=1;" value="&lt;b&gt;health.py&lt;/b&gt;&lt;br&gt;&lt;font style=&#39;font-size:11px&#39;&gt;GET /health  ·  GET /health/omlx(后者调用 assert_omlx_reachable)&lt;/font&gt;" vertex="1">
           <mxGeometry height="160" width="340" x="380" y="50" as="geometry" />
         </mxCell>
-        <mxCell id="api_responses" parent="api_layer" style="fillColor=#FFFFFF;strokeColor=#94A3B8;fontColor=#1E293B;fontSize=13;;rounded=1;whiteSpace=wrap;html=1;" value="&lt;b&gt;models/convert.py · models/health.py&lt;/b&gt;&lt;br&gt;&lt;font style=&#39;font-size:11px&#39;&gt;按功能拆分 ConvertResponse / HealthResponse / OmlxHealthResponse Pydantic 响应模型&lt;/font&gt;" vertex="1">
+        <mxCell id="api_responses" parent="api_layer" style="fillColor=#FFFFFF;strokeColor=#94A3B8;fontColor=#1E293B;fontSize=13;;rounded=1;whiteSpace=wrap;html=1;" value="&lt;b&gt;models/ · dependencies.py&lt;/b&gt;&lt;br&gt;&lt;font style=&#39;font-size:11px&#39;&gt;按功能拆分 Pydantic 响应模型; get_convert_service 通过 Depends 提供 app.state 中的共享服务&lt;/font&gt;" vertex="1">
           <mxGeometry height="160" width="340" x="740" y="50" as="geometry" />
         </mxCell>
         <mxCell id="core_layer" parent="process" style="swimlane;html=1;rounded=1;horizontal=1;startSize=30;fillColor=#F1F5F9;swimlaneFillColor=#E2E8F0;strokeColor=#64748B;fontColor=#0F172A;fontSize=13;" value="&lt;b&gt;core/ · 基础设施(环境变量 / 异常 / 日志)&lt;/b&gt;" vertex="1">
@@ -275,7 +275,7 @@
             <mxPoint x="368" y="210" as="targetPoint" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="step_256_1_2" edge="1" parent="1" style="endArrow=block;endFill=1;html=1;rounded=0;strokeColor=#2563EB;strokeWidth=2;fontSize=11;labelBackgroundColor=#FFFFFF;" value="ASGI scope  →  匹配 POST /convert  →  convert_file()">
+        <mxCell id="step_256_1_2" edge="1" parent="1" style="endArrow=block;endFill=1;html=1;rounded=0;strokeColor=#2563EB;strokeWidth=2;fontSize=11;labelBackgroundColor=#FFFFFF;" value="ASGI scope  →  匹配 POST /convert  →  convert_file()  →  Depends(get_convert_service)">
           <mxGeometry relative="1" as="geometry">
             <mxPoint x="368" y="256" as="sourcePoint" />
             <mxPoint x="576" y="256" as="targetPoint" />
@@ -335,13 +335,13 @@
         <mxCell id="async_text_632" parent="1" style="fillColor=#F5F3FF;strokeColor=#7C3AED;dashed=1;fontColor=#4C1D95;fontSize=11;;rounded=1;whiteSpace=wrap;html=1;" value="— — — — — 切换到 worker thread (run_in_threadpool) — — — — —" vertex="1">
           <mxGeometry height="26" width="2280" x="60" y="618" as="geometry" />
         </mxCell>
-        <mxCell id="step_664_2_5" edge="1" parent="1" style="endArrow=block;endFill=1;html=1;rounded=0;strokeColor=#2563EB;strokeWidth=2;fontSize=11;labelBackgroundColor=#FFFFFF;" value="service.convert(path, source_file, options)">
+        <mxCell id="step_664_2_5" edge="1" parent="1" style="endArrow=block;endFill=1;html=1;rounded=0;strokeColor=#2563EB;strokeWidth=2;fontSize=11;labelBackgroundColor=#FFFFFF;" value="service.convert(path, source_file)">
           <mxGeometry relative="1" as="geometry">
             <mxPoint x="576" y="664" as="sourcePoint" />
             <mxPoint x="1200" y="664" as="targetPoint" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="self_702_5" parent="1" style="fillColor=#F8FAFC;strokeColor=#94A3B8;dashed=1;fontColor=#1E293B;fontSize=11;;rounded=1;whiteSpace=wrap;html=1;" value="固定启用 plugin → 创建惰性 OmlxOcrClient" vertex="1">
+        <mxCell id="self_702_5" parent="1" style="fillColor=#F8FAFC;strokeColor=#94A3B8;dashed=1;fontColor=#1E293B;fontSize=11;;rounded=1;whiteSpace=wrap;html=1;" value="复用应用级 OmlxOcrClient；仅在发现图片时发起 OCR 请求" vertex="1">
           <mxGeometry height="26" width="1122" x="1218" y="688" as="geometry" />
         </mxCell>
         <mxCell id="step_742_5_7" edge="1" parent="1" style="endArrow=block;endFill=1;html=1;rounded=0;strokeColor=#2563EB;strokeWidth=2;fontSize=11;labelBackgroundColor=#FFFFFF;" value="plugin 发现图片 → chat.completions.create(...)；无图片则不联网">

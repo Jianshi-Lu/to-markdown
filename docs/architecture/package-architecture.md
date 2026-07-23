@@ -5,6 +5,7 @@
 项目采用“入口薄、业务集中、外部依赖隔离”的分包方式：
 
 - HTTP 层只处理请求和响应。
+- 路由依赖通过 FastAPI `Depends` 获取应用级共享对象。
 - 业务编排集中在 service 层。
 - MarkItDown、oMLX、OpenAI SDK 这类外部依赖放在集成层。
 - 内部模型不绑定 FastAPI，方便未来复用到异步任务或命令行工具。
@@ -16,6 +17,7 @@ main.py
 api/
   convert.py
   health.py
+  dependencies.py
   models/
     convert.py
     health.py
@@ -29,6 +31,7 @@ convert/
   ocr_markdown_cleaner.py
 integrations/
   markitdown.py
+  minio.py
   omlx.py
 uploads/
   temp_uploads.py
@@ -52,8 +55,9 @@ uploads/
 
 HTTP API 层。
 
-- `convert.py`：实现 `POST /convert`。
+- `convert.py`：实现 `POST /convert` 和 `POST /convert/batch`。
 - `health.py`：实现健康检查。
+- `dependencies.py`：通过 FastAPI `Depends` 提供应用级共享服务。
 - `models/convert.py`：定义文件转换响应模型。
 - `models/health.py`：定义健康检查响应模型。
 
@@ -92,6 +96,11 @@ HTTP API 层。
   - 修复部分 OCR 模型返回的 byte-level tokenizer 乱码。
   - 提供 oMLX 可达性检查。
 
+- `minio.py`：
+  - 列出指定批次的 `original/` 对象。
+  - 下载原文件并上传对应的 `converted/` Markdown 对象。
+  - 将 MinIO 对象前缀映射为同批次的输出路径。
+
 项目其他层不直接依赖 OpenAI SDK 和 MarkItDown 细节。
 
 ### `uploads`
@@ -112,7 +121,7 @@ HTTP API 层。
 当前同步路径：
 
 ```text
-FastAPI route -> ConvertService.convert(...) -> ConvertResponse
+FastAPI route -> Depends(get_convert_service) -> ConvertService.convert(...) -> ConvertResponse
 ```
 
 未来异步路径可以变成：
