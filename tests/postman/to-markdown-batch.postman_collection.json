@@ -1,0 +1,122 @@
+{
+  "info": {
+    "name": "to-markdown 批次转换联调",
+    "description": "验证 Python 从 MinIO 读取 <uploadBatchId>/original/，逐个转换并写入 <uploadBatchId>/converted/。",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://127.0.0.1:8081"
+    },
+    {
+      "key": "uploadBatchId",
+      "value": "550e8400-e29b-41d4-a716-446655440000"
+    }
+  ],
+  "item": [
+    {
+      "name": "健康检查",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/health",
+          "host": ["{{baseUrl}}"],
+          "path": ["health"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "oMLX 连通性检查",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/health/omlx",
+          "host": ["{{baseUrl}}"],
+          "path": ["health", "omlx"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('oMLX endpoint reachable', function () {",
+              "    pm.expect(pm.response.code).to.be.oneOf([200, 503]);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "批次转换并写回 MinIO",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"uploadBatchId\": \"{{uploadBatchId}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/convert/batch",
+          "host": ["{{baseUrl}}"],
+          "path": ["convert", "batch"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "const result = pm.response.json();",
+              "const requestBody = JSON.parse(pm.variables.replaceIn(pm.request.body.raw));",
+              "pm.test('返回批次号一致', function () {",
+              "    pm.expect(result.uploadBatchId).to.eql(requestBody.uploadBatchId);",
+              "});",
+              "pm.test('返回逐文件 convertedObjectKey', function () {",
+              "    pm.expect(result.files).to.be.an('array').that.is.not.empty;",
+              "    result.files.forEach(function (file) {",
+              "        pm.expect(file.originalObjectKey).to.be.a('string');",
+              "        pm.expect(file.convertedObjectKey).to.include('/converted/');",
+              "        pm.expect(file.convertedObjectKey).to.match(/\\.md$/);",
+              "    });",
+              "});"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
