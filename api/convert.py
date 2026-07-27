@@ -5,49 +5,43 @@ from starlette.concurrency import run_in_threadpool
 
 from api.dependencies import (
     get_convert_service,
-    get_minio_batch_object_storage,
+    get_minio_object_storage,
 )
 from api.models.convert import (
-    BatchConvertRequest,
-    BatchConvertResponse,
-    BatchConvertedFileResponse,
     ConvertResponse,
+    ObjectConvertRequest,
+    ObjectConvertResponse,
 )
 from core.config import SETTINGS
 from convert import ConvertService, SourceFile
-from integrations.minio import MinioBatchObjectStorage
+from integrations.minio import MinioObjectStorage
 from uploads.temp_uploads import save_upload_file
 
 router = APIRouter(tags=["convert"])
 
 
-@router.post("/convert/batch", response_model=BatchConvertResponse)
-async def convert_batch(
-    request: BatchConvertRequest,
+@router.post("/convert/object", response_model=ObjectConvertResponse)
+async def convert_object(
+    request: ObjectConvertRequest,
     service: ConvertService = Depends(get_convert_service),
-    object_storage: MinioBatchObjectStorage = Depends(
-        get_minio_batch_object_storage
+    object_storage: MinioObjectStorage = Depends(
+        get_minio_object_storage
     ),
-) -> BatchConvertResponse:
-    """按 uploadBatchId 逐个转换 original 文件并写入 converted 路径。"""
+) -> ObjectConvertResponse:
+    """转换单个 MinIO original 对象并写入对应 converted 路径。"""
 
     result = await run_in_threadpool(
-        service.convert_batch,
-        request.upload_batch_id,
+        service.convert_object,
+        request.original_object_key,
         object_storage,
     )
-    return BatchConvertResponse(
-        upload_batch_id=result.upload_batch_id,
-        files=[
-            BatchConvertedFileResponse(
-                original_object_key=file.original_object_key,
-                original_filename=file.original_filename,
-                converted_object_key=file.converted_object_key,
-                content_type=file.content_type,
-                warnings=file.warnings,
-            )
-            for file in result.files
-        ],
+    return ObjectConvertResponse(
+        original_object_key=result.original_object_key,
+        original_filename=result.original_filename,
+        converted_object_key=result.converted_object_key,
+        content_type=result.content_type,
+        status=result.status,
+        warnings=result.warnings,
     )
 
 

@@ -2,16 +2,14 @@
 
 from convert.service import ConvertService
 from convert.types import (
-    BatchConvertResult,
-    BatchConvertedFile,
     ConvertResult,
+    ObjectConvertResult,
     SourceFile,
 )
 
 __all__ = [
-    "BatchConvertResult",
-    "BatchConvertedFile",
     "ConvertResult",
     "ConvertService",
+    "ObjectConvertResult",
     "SourceFile",
 ]

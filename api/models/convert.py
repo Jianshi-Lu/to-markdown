@@ -11,30 +11,27 @@ class ConvertResponse(BaseModel):
     warnings: list[str] = Field(default_factory=list)
 
 
-class BatchConvertRequest(BaseModel):
-    """批次 Markdown 转换请求。"""
+class ObjectConvertRequest(BaseModel):
+    """单个 MinIO 原始对象转换请求。"""
 
     model_config = ConfigDict(populate_by_name=True)
 
-    upload_batch_id: str = Field(min_length=1, alias="uploadBatchId")
+    original_object_key: str = Field(min_length=1, alias="originalObjectKey")
 
 
-class BatchConvertedFileResponse(BaseModel):
-    """批次中一个原始对象对应的已写入 Markdown 对象。"""
+class ObjectConvertResponse(BaseModel):
+    """单个 MinIO 原始对象的转换结果。"""
 
     model_config = ConfigDict(populate_by_name=True)
 
     original_object_key: str = Field(alias="originalObjectKey")
     original_filename: str = Field(alias="originalFilename")
-    converted_object_key: str = Field(alias="convertedObjectKey")
+    converted_object_key: str | None = Field(
+        default=None,
+        alias="convertedObjectKey",
+    )
     content_type: str | None = Field(default=None, alias="contentType")
+    status: str
     warnings: list[str] = Field(default_factory=list)
+    error: str | None = None
 
-
-class BatchConvertResponse(BaseModel):
-    """批次 Markdown 转换响应。"""
-
-    model_config = ConfigDict(populate_by_name=True)
-
-    upload_batch_id: str = Field(alias="uploadBatchId")
-    files: list[BatchConvertedFileResponse]

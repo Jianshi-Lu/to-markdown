@@ -24,7 +24,7 @@ class OcrMarkdownCleanerTest(unittest.TestCase):
 
         result, normalized, warnings = self.cleaner.clean(markdown)
 
-        self.assertEqual(result, "筆記\n\n# SQL 教程\n\n作者：廖雪峰")
+        self.assertEqual(result, "筆記\n\n### SQL 教程\n\n作者：廖雪峰")
         self.assertTrue(normalized)
         self.assertEqual(warnings, [])
 
@@ -64,7 +64,7 @@ class OcrMarkdownCleanerTest(unittest.TestCase):
 
         self.assertEqual(
             result,
-            "# Description:\n# OCR TEST DOCUMENT\nSupplier: Example Co.\n",
+            "# Description:\n### OCR TEST DOCUMENT\nSupplier: Example Co.\n",
         )
         self.assertTrue(normalized)
         self.assertEqual(warnings, [])
@@ -81,7 +81,7 @@ class OcrMarkdownCleanerTest(unittest.TestCase):
 
         self.assertEqual(
             result,
-            "# OCR TEST DOCUMENT\n\nSupplier: Example Co.",
+            "### OCR TEST DOCUMENT\n\nSupplier: Example Co.",
         )
         self.assertTrue(normalized)
 

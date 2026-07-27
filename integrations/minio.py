@@ -1,11 +1,10 @@
-"""读写资信文件批次中的 MinIO 对象。"""
+"""读写资信文件 MinIO 对象。"""
 
 from dataclasses import dataclass
 from io import BytesIO
 from pathlib import Path
 from pathlib import PurePosixPath
 from urllib.parse import urlparse
-from uuid import UUID
 
 
 @dataclass(frozen=True)
@@ -18,8 +17,8 @@ class OriginalObject:
     size_bytes: int
 
 
-class MinioBatchObjectStorage:
-    """封装 MinIO SDK，管理批次原文件和转换结果。"""
+class MinioObjectStorage:
+    """封装 MinIO SDK，管理单个原始文件和转换结果。"""
 
     def __init__(
         self,
@@ -50,32 +49,17 @@ class MinioBatchObjectStorage:
         self._client = client
         self._bucket = bucket
 
-    def list_original_objects(self, upload_batch_id: str) -> list[OriginalObject]:
-        """按对象 Key 排序返回指定批次的 original 文件。"""
+    def get_original_object(self, object_key: str) -> OriginalObject:
+        """读取单个 original 对象的元数据。"""
 
-        batch_id = _normalize_batch_id(upload_batch_id)
-        prefix = f"{batch_id}/original/"
-        objects: list[OriginalObject] = []
-        for item in self._client.list_objects(
-            self._bucket,
-            prefix=prefix,
-            recursive=True,
-        ):
-            object_key = item.object_name
-            if not object_key or object_key.endswith("/"):
-                continue
-            if not object_key.startswith(prefix):
-                continue
-            filename = Path(object_key).name
-            objects.append(
-                OriginalObject(
-                    object_key=object_key,
-                    filename=filename,
-                    content_type=getattr(item, "content_type", None),
-                    size_bytes=item.size,
-                )
-            )
-        return sorted(objects, key=lambda item: item.object_key)
+        normalized_key = _normalize_original_object_key(object_key)
+        item = self._client.stat_object(self._bucket, normalized_key)
+        return OriginalObject(
+            object_key=normalized_key,
+            filename=Path(normalized_key).name,
+            content_type=getattr(item, "content_type", None),
+            size_bytes=item.size,
+        )
 
     def download(self, object_key: str, destination: Path) -> None:
         """将指定原始对象流式下载到临时磁盘。"""
@@ -116,8 +100,15 @@ class MinioBatchObjectStorage:
         )
 
 
-def _normalize_batch_id(upload_batch_id: str) -> str:
-    try:
-        return str(UUID(upload_batch_id))
-    except (AttributeError, ValueError, TypeError) as exc:
-        raise ValueError("uploadBatchId 必须是合法 UUID") from exc
+def _normalize_original_object_key(object_key: str) -> str:
+    if object_key is None or not object_key.strip():
+        raise ValueError("originalObjectKey 不能为空")
+
+    normalized = object_key.replace("\\", "/").strip("/")
+    if "/original/" not in f"/{normalized}/":
+        raise ValueError("原始对象 Key 必须位于 original/ 路径下")
+    if normalized.endswith("/"):
+        raise ValueError("原始对象 Key 不能是目录")
+    if any(segment in {"", ".", ".."} for segment in normalized.split("/")):
+        raise ValueError("原始对象 Key 不合法")
+    return normalized

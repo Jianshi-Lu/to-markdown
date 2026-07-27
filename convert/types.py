@@ -20,19 +20,14 @@ class ConvertResult:
 
 
 @dataclass(frozen=True)
-class BatchConvertedFile:
-    """一个原始对象对应的已写入 Markdown 对象。"""
+class ObjectConvertResult:
+    """一个 MinIO 原始对象对应的转换结果。"""
 
     original_object_key: str
     original_filename: str
-    converted_object_key: str
+    converted_object_key: str | None
     content_type: str | None
+    status: str
     warnings: list[str] = field(default_factory=list)
+    error: str | None = None
 
-
-@dataclass(frozen=True)
-class BatchConvertResult:
-    """一个上传批次的逐文件转换结果。"""
-
-    upload_batch_id: str
-    files: list[BatchConvertedFile] = field(default_factory=list)

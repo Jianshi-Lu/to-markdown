@@ -3,7 +3,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 
-from integrations.minio import MinioBatchObjectStorage
+from integrations.minio import MinioObjectStorage
 
 
 class FakeResponse:
@@ -42,6 +42,13 @@ class FakeMinioClient:
     def get_object(self, _bucket, object_key):
         return self.responses[object_key]
 
+    def stat_object(self, _bucket, object_key):
+        response = self.responses[object_key]
+        return SimpleNamespace(
+            size=len(response._content),
+            content_type="application/pdf",
+        )
+
     def put_object(self, _bucket, object_key, data, length, content_type):
         self.uploads[object_key] = {
             "content": data.read(),
@@ -50,33 +57,26 @@ class FakeMinioClient:
         }
 
 
-class MinioBatchObjectStorageTest(unittest.TestCase):
-    def test_lists_batch_original_objects_in_stable_order(self):
+class MinioObjectStorageTest(unittest.TestCase):
+    def test_reads_one_original_object_metadata(self):
         client = FakeMinioClient()
-        storage = MinioBatchObjectStorage(
+        storage = MinioObjectStorage(
             "http://minio:9000", "access", "secret", "credential-files", client
         )
 
-        objects = storage.list_original_objects(
-            "550e8400-e29b-41d4-a716-446655440000"
+        original = storage.get_original_object(
+            "550e8400-e29b-41d4-a716-446655440000/original/a.pdf"
         )
 
-        self.assertEqual(
-            client.asserted_prefix,
-            "550e8400-e29b-41d4-a716-446655440000/original/",
-        )
-        self.assertTrue(client.asserted_recursive)
-        self.assertEqual(
-            [item.object_key for item in objects],
-            [
-                "550e8400-e29b-41d4-a716-446655440000/original/a.pdf",
-                "550e8400-e29b-41d4-a716-446655440000/original/b.pdf",
-            ],
-        )
+        self.assertEqual(original.object_key,
+                         "550e8400-e29b-41d4-a716-446655440000/original/a.pdf")
+        self.assertEqual(original.filename, "a.pdf")
+        self.assertEqual(original.content_type, "application/pdf")
+        self.assertEqual(original.size_bytes, 1)
 
     def test_downloads_object_to_temp_disk_and_closes_response(self):
         client = FakeMinioClient()
-        storage = MinioBatchObjectStorage(
+        storage = MinioObjectStorage(
             "http://minio:9000", "access", "secret", "credential-files", client
         )
 
@@ -96,15 +96,15 @@ class MinioBatchObjectStorageTest(unittest.TestCase):
         self.assertTrue(response.released)
 
     def test_rejects_invalid_batch_id(self):
-        storage = MinioBatchObjectStorage(
+        storage = MinioObjectStorage(
             "http://minio:9000", "access", "secret", "credential-files", FakeMinioClient()
         )
 
         with self.assertRaises(ValueError):
-            storage.list_original_objects("not-a-uuid")
+            storage.get_original_object("not-a-uuid")
 
     def test_maps_original_key_to_converted_markdown_key(self):
-        storage = MinioBatchObjectStorage(
+        storage = MinioObjectStorage(
             "http://minio:9000", "access", "secret", "credential-files", FakeMinioClient()
         )
 
@@ -117,7 +117,7 @@ class MinioBatchObjectStorageTest(unittest.TestCase):
 
     def test_uploads_markdown_with_content_type(self):
         client = FakeMinioClient()
-        storage = MinioBatchObjectStorage(
+        storage = MinioObjectStorage(
             "http://minio:9000", "access", "secret", "credential-files", client
         )
 

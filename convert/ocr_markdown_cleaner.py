@@ -35,7 +35,7 @@ class OcrMarkdownCleaner:
     @staticmethod
     def _replace_detection(match: re.Match[str]) -> str:
         if match.group(1).lower() == "title":
-            return "# "
+            return "### "
         return ""
 
     def _normalize_ocr_block(self, match: re.Match[str]) -> str:
@@ -62,7 +62,7 @@ class OcrMarkdownCleaner:
 
             detection_type = detection.group(1).lower()
             if detection_type == "title":
-                parts.append(f"# {value}")
+                parts.append(f"### {value}")
             else:
                 parts.append(value)
 
