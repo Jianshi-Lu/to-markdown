@@ -38,27 +38,40 @@ curl -X POST http://127.0.0.1:8081/convert \
 
 响应中的 `markdown` 字段为转换结果；`warnings` 字段用于返回非致命提示。
 
-## `POST /convert/batch`
+## `POST /convert/object`
 
-调用方只发送批次 UUID，Python 服务自行从 MinIO 读取该批次的 `original` 对象，逐个转换并直接写入同批次的 `converted` 路径：
+Java 负责批次循环和数据库状态更新；Python 每次只接收一个 MinIO `original` object key，
+读取单个对象、转换 Markdown，并写入对应的 `converted` object key：
 
 ```bash
-curl -X POST http://127.0.0.1:8081/convert/batch \
+curl -X POST http://127.0.0.1:8081/convert/object \
   -H 'Content-Type: application/json' \
-  -d '{"uploadBatchId":"550e8400-e29b-41d4-a716-446655440000"}'
+  -d '{"originalObjectKey":"bid-records/8/batches/550e8400-e29b-41d4-a716-446655440000/original/a.pdf"}'
 ```
 
-输入对象位于：
+输入对象：
 
 ```text
-<uploadBatchId>/original/
+bid-records/<bidRecordId>/batches/<uploadBatchId>/original/a.pdf
 ```
 
-输出对象位于同批次的：
+输出对象：
 
 ```text
-<uploadBatchId>/converted/
+bid-records/<bidRecordId>/batches/<uploadBatchId>/converted/a.md
 ```
 
-例如 `original/a.pdf` 会生成 `converted/a.md`。`converted` 前缀不存在时，首次上传 Markdown
-对象会自动形成。响应只返回原对象和转换后对象的 Key，不返回全部 Markdown 内容。
+`converted` 前缀不存在时，首次上传 Markdown 对象会自动形成。Python 不读取批次列表，也不
+访问业务数据库；批次循环、单文件状态和批次状态由 Java 负责。
+
+成功响应示例：
+
+```json
+{
+  "originalObjectKey": ".../original/a.pdf",
+  "originalFilename": "a.pdf",
+  "convertedObjectKey": ".../converted/a.md",
+  "status": "COMPLETED",
+  "warnings": []
+}
+```

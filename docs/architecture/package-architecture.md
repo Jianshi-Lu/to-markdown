@@ -55,7 +55,7 @@ uploads/
 
 HTTP API 层。
 
-- `convert.py`：实现 `POST /convert` 和 `POST /convert/batch`。
+- `convert.py`：实现 `POST /convert` 和 `POST /convert/object`。
 - `health.py`：实现健康检查。
 - `dependencies.py`：通过 FastAPI `Depends` 提供应用级共享服务。
 - `models/convert.py`：定义文件转换响应模型。
@@ -97,7 +97,7 @@ HTTP API 层。
   - 提供 oMLX 可达性检查。
 
 - `minio.py`：
-  - 列出指定批次的 `original/` 对象。
+  - 读取一个 `original/` 对象。
   - 下载原文件并上传对应的 `converted/` Markdown 对象。
   - 将 MinIO 对象前缀映射为同批次的输出路径。
 

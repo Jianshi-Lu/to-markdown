@@ -74,7 +74,7 @@ flowchart TB
 | `GET` | `/health` | `api.health.health()` | 检查 Web 进程是否存活。 |
 | `GET` | `/health/omlx` | `api.health.omlx_health()` | 检查 oMLX TCP 端点是否可达。 |
 | `POST` | `/convert` | `api.convert.convert_file()` | 上传文件并返回 Markdown。 |
-| `POST` | `/convert/batch` | `api.convert.convert_batch()` | 从 MinIO 批次读取原文件，逐个转换并写入 `converted/`。 |
+| `POST` | `/convert/object` | `api.convert.convert_object()` | 从 MinIO 读取一个原文件，转换并写入对应 `converted/`。 |
 
 没有根路径 `/`，也没有 `/hello/{name}`。
 
@@ -98,28 +98,28 @@ flowchart TB
 | `normalized` | `boolean` | OCR 清理器是否实际修改了输出。 |
 | `warnings` | `string[]` | OCR 调用失败、模型输出退化等非致命提示。 |
 
-### 3.3 `POST /convert/batch`
+### 3.3 `POST /convert/object`
 
-请求体只包含批次 UUID：
+请求体只包含一个原始对象 Key：
 
 ```json
-{"uploadBatchId":"550e8400-e29b-41d4-a716-446655440000"}
+{"originalObjectKey":"bid-records/8/batches/550e8400-e29b-41d4-a716-446655440000/original/a.pdf"}
 ```
 
-Python 服务自行读取 MinIO 中的：
+Python 服务读取 MinIO 中的单个对象：
 
 ```text
-{uploadBatchId}/original/
+bid-records/{bidRecordId}/batches/{uploadBatchId}/original/a.pdf
 ```
 
-文件按顺序逐个转换，并立即写入同批次的：
+转换后立即写入对应的：
 
 ```text
-{uploadBatchId}/converted/
+bid-records/{bidRecordId}/batches/{uploadBatchId}/converted/a.md
 ```
 
-MinIO 使用对象前缀表示目录，首次写入时会自动形成 `converted/`，不需要 Java 端创建或回写。
-响应只返回 `originalObjectKey`、`convertedObjectKey` 和 `warnings`，不返回全部 Markdown 内容。
+MinIO 使用对象前缀表示目录，首次写入时会自动形成 `converted/`。Python 不执行批次循环，
+也不访问业务数据库；Java 负责逐文件调用和状态更新。
 
 ### 3.4 统一错误
 

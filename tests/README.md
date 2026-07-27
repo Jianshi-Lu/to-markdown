@@ -52,5 +52,5 @@
 ## Postman 批次联调
 
 可导入 [`postman/to-markdown-batch.postman_collection.json`](postman/to-markdown-batch.postman_collection.json)，
-将集合变量 `uploadBatchId` 改为 MinIO 中实际存在的批次 UUID，然后调用批次转换接口。
+将集合变量 `originalObjectKey` 改为 MinIO 中实际存在的原始对象 Key，然后调用单文件转换接口。
 详细前置条件见 [`postman/README.md`](postman/README.md)。

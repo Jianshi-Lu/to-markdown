@@ -43,21 +43,20 @@ POST /convert
 
 `ConvertService` 在 FastAPI 应用启动时创建一次，并在应用关闭时释放 oMLX/OpenAI SDK 的 HTTP 资源。路由通过 `Depends(get_convert_service)` 获取该实例，而不是自行创建或直接装配服务。每次转换只创建请求级的 OCR 调用状态，避免并发请求共享 warning。
 
-### `POST /convert/batch`
+### `POST /convert/object`
 
-请求体为 JSON：
+请求体为单个 MinIO 原始对象 Key：
 
 ```json
-{"uploadBatchId":"550e8400-e29b-41d4-a716-446655440000"}
+{"originalObjectKey":"bid-records/8/batches/550e8400-e29b-41d4-a716-446655440000/original/a.pdf"}
 ```
 
-服务通过应用生命周期内复用的 MinIO 读取器列出该批次的
-`{uploadBatchId}/original/` 对象，按 object key 稳定排序；每个对象先流式下载到
-`TEMP_DIR` 下的临时文件，再复用 `ConvertService.convert()` 调用 MarkItDown，转换完成后删除
-临时文件。每个文件转换完成后立即写入同批次的
-`{uploadBatchId}/converted/` 路径；MinIO 以对象前缀表示目录，首次上传时无需额外创建目录。
-Java 不参与原文件读取或 Markdown 回写，只负责触发批次转换。响应仅返回原对象 Key、转换对象
-Key 和 warning，不返回全部 Markdown 内容。
+服务通过应用生命周期内复用的 MinIO 读取器读取一个
+`bid-records/{bidRecordId}/batches/{uploadBatchId}/original/a.pdf` 对象，下载到 `TEMP_DIR` 下的临时文件，再复用
+`ConvertService.convert()` 调用 MarkItDown，转换完成后删除临时文件，并立即写入
+`bid-records/{bidRecordId}/batches/{uploadBatchId}/converted/a.md`。MinIO 以对象前缀表示目录，首次上传时无需额外创建目录。
+Java 负责批次循环、文件状态和批次状态，Python 只处理当前对象。响应仅返回原对象 Key、转换
+对象 Key 和 warning，不返回全部 Markdown 内容。
 
 ## API
 

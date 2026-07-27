@@ -1,7 +1,7 @@
 {
   "info": {
-    "name": "to-markdown 批次转换联调",
-    "description": "验证 Python 从 MinIO 读取 <uploadBatchId>/original/，逐个转换并写入 <uploadBatchId>/converted/。",
+    "name": "to-markdown 单文件转换联调",
+    "description": "验证 Python 从 MinIO 读取一个 original 对象并写入对应 converted 对象。",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -10,8 +10,8 @@
       "value": "http://127.0.0.1:8081"
     },
     {
-      "key": "uploadBatchId",
-      "value": "550e8400-e29b-41d4-a716-446655440000"
+      "key": "originalObjectKey",
+      "value": "bid-records/8/batches/550e8400-e29b-41d4-a716-446655440000/original/a.pdf"
     }
   ],
   "item": [
@@ -66,7 +66,7 @@
       ]
     },
     {
-      "name": "批次转换并写回 MinIO",
+      "name": "单文件转换并写回 MinIO",
       "request": {
         "method": "POST",
         "header": [
@@ -77,7 +77,7 @@
         ],
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"uploadBatchId\": \"{{uploadBatchId}}\"\n}",
+          "raw": "{\n  \"originalObjectKey\": \"{{originalObjectKey}}\"\n}",
           "options": {
             "raw": {
               "language": "json"
@@ -85,9 +85,9 @@
           }
         },
         "url": {
-          "raw": "{{baseUrl}}/convert/batch",
+          "raw": "{{baseUrl}}/convert/object",
           "host": ["{{baseUrl}}"],
-          "path": ["convert", "batch"]
+          "path": ["convert", "object"]
         }
       },
       "event": [
@@ -102,16 +102,16 @@
               "",
               "const result = pm.response.json();",
               "const requestBody = JSON.parse(pm.variables.replaceIn(pm.request.body.raw));",
-              "pm.test('返回批次号一致', function () {",
-              "    pm.expect(result.uploadBatchId).to.eql(requestBody.uploadBatchId);",
+              "pm.test('返回原对象 Key 一致', function () {",
+              "    pm.expect(result.originalObjectKey).to.eql(requestBody.originalObjectKey);",
               "});",
-              "pm.test('返回逐文件 convertedObjectKey', function () {",
-              "    pm.expect(result.files).to.be.an('array').that.is.not.empty;",
-              "    result.files.forEach(function (file) {",
-              "        pm.expect(file.originalObjectKey).to.be.a('string');",
-              "        pm.expect(file.convertedObjectKey).to.include('/converted/');",
-              "        pm.expect(file.convertedObjectKey).to.match(/\\.md$/);",
-              "    });",
+              "pm.test('文件转换完成', function () {",
+              "    pm.expect(result.status).to.eql('COMPLETED');",
+              "    pm.expect(result.convertedObjectKey).to.include('/converted/');",
+              "    pm.expect(result.convertedObjectKey).to.match(/\\.md$/);",
+              "});",
+              "pm.test('响应包含转换结果', function () {",
+              "    pm.expect(result.originalFilename).to.be.a('string');",
               "});"
             ]
           }
