@@ -125,9 +125,14 @@ MarkItDown plugin 在服务端固定启用；文件中没有可 OCR 图片时不
 - 数据库。
 - Redis / Celery / 任务队列。
 - 用户系统。
-- 文件长期存储。
+- 原始文件上传和业务文件元数据管理（由 Java 负责）。
+- 业务批次/文件状态维护（由 Java 负责）。
 - 文本 LLM 二次重写。
 - 页面端 UI。
+
+当前 `/convert/object` 已通过 `integrations/minio.py` 从共享 MinIO 读取一个
+`original` 对象，并将转换后的 Markdown 写入同批次的 `converted` 前缀。Python
+不维护业务数据库，也不负责批次循环；Java 负责逐文件调用、状态更新和后续汇总。
 
 这些能力后续都可以在当前分层上扩展，不需要改写 MarkItDown/oMLX 的核心适配逻辑。
 
