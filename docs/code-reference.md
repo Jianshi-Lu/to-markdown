@@ -12,7 +12,6 @@ api/
   health.py
   dependencies.py
   models/
-    convert.py
     health.py
 core/
   config.py
@@ -25,8 +24,9 @@ convert/
 integrations/
   markitdown.py
   omlx.py
-uploads/
-  temp_uploads.py
+archive/
+  integrations/
+    minio.py
 tests/
 experiments/
 ```
@@ -45,13 +45,11 @@ experiments/
 flowchart TB
     Main[main.py] --> API[api]
     Main --> Core[core.errors]
-    API --> Uploads[uploads]
     API --> Convert[convert]
     API --> Models[api.models]
     API --> Dependencies[api.dependencies]
     Convert --> Integrations[integrations]
     Convert --> Core
-    Uploads --> Core
     Integrations --> Vendors[MarkItDown / OpenAI SDK / oMLX]
 ```
 
@@ -59,8 +57,7 @@ flowchart TB
 
 | 层 | 职责 | 不应依赖 |
 | --- | --- | --- |
-| `api` | 接收 HTTP 请求、处理上传、通过 `Depends` 获取服务、映射响应 | MarkItDown 和 OpenAI SDK 的细节 |
-| `uploads` | 将上传流分块写入临时目录并清理 | 转换器和 OCR 逻辑 |
+| `api` | 接收 multipart 文件流、通过 `Depends` 获取服务、返回 Markdown 文件 | MarkItDown 和 OpenAI SDK 的细节 |
 | `convert` | 编排一次文件转换和 OCR 输出清理 | FastAPI 请求对象和 HTTP 序列化 |
 | `integrations` | 适配 MarkItDown、OpenAI-compatible oMLX | FastAPI 路由和 API 响应模型 |
 | `core` | 配置、异常和基础日志入口 | 具体业务流程 |
@@ -73,8 +70,7 @@ flowchart TB
 | --- | --- | --- | --- |
 | `GET` | `/health` | `api.health.health()` | 检查 Web 进程是否存活。 |
 | `GET` | `/health/omlx` | `api.health.omlx_health()` | 检查 oMLX TCP 端点是否可达。 |
-| `POST` | `/convert` | `api.convert.convert_file()` | 上传文件并返回 Markdown。 |
-| `POST` | `/convert/object` | `api.convert.convert_object()` | 从 MinIO 读取一个原文件，转换并写入对应 `converted/`。 |
+| `POST` | `/convert` | `api.convert.convert_file()` | 上传一个文件并返回单个 Markdown 文件。 |
 
 没有根路径 `/`，也没有 `/hello/{name}`。
 
@@ -88,40 +84,14 @@ flowchart TB
 
 转换服务固定启用 MarkItDown plugin。文件中没有可 OCR 图片时，plugin 不会访问 oMLX。
 
-响应模型位于 [`api/models/convert.py`](../api/models/convert.py)：
+成功响应直接使用 `text/markdown; charset=utf-8`，响应体就是 Markdown 内容；
+`Content-Disposition` 提供 `.md` 下载文件名。服务不返回 JSON envelope，也不
+返回 object key、业务状态或存储路径。
 
-| 字段 | 类型 | 说明 |
-| --- | --- | --- |
-| `markdown` | `string` | 转换后的 Markdown。 |
-| `source_filename` | `string` | 原始上传文件名。 |
-| `content_type` | `string \| null` | 客户端声明的 MIME type。 |
-| `normalized` | `boolean` | OCR 清理器是否实际修改了输出。 |
-| `warnings` | `string[]` | OCR 调用失败、模型输出退化等非致命提示。 |
+服务不提供 `/convert/object`，不读取 MinIO、文件系统业务路径或远程 URL。调用
+方负责取得文件内容，并保存返回的 Markdown。
 
-### 3.3 `POST /convert/object`
-
-请求体只包含一个原始对象 Key：
-
-```json
-{"originalObjectKey":"bid-records/8/batches/550e8400-e29b-41d4-a716-446655440000/original/a.pdf"}
-```
-
-Python 服务读取 MinIO 中的单个对象：
-
-```text
-bid-records/{bidRecordId}/batches/{uploadBatchId}/original/a.pdf
-```
-
-转换后立即写入对应的：
-
-```text
-bid-records/{bidRecordId}/batches/{uploadBatchId}/converted/a.md
-```
-
-MinIO 使用对象前缀表示目录，首次写入时会自动形成 `converted/`。Python 不执行批次循环，
-也不访问业务数据库；Java 负责逐文件调用和状态更新。
-
-### 3.4 统一错误
+### 3.3 统一错误
 
 `main.py` 将 `AppError` 转换为：
 
@@ -169,7 +139,6 @@ sequenceDiagram
     participant C as 调用方
     participant R as api.convert
     participant D as api.dependencies
-    participant U as uploads.temp_uploads
     participant S as ConvertService
     participant M as MarkItDownConverter
     participant O as OmlxOcrClient
@@ -177,12 +146,10 @@ sequenceDiagram
     C->>R: POST /convert
     R->>D: Depends(get_convert_service)
     D-->>R: app.state.convert_service
-    R->>U: await save_upload_file(file, SETTINGS)
-    U-->>R: TempUploadedFile
-    R->>R: 构造 SourceFile
-    R->>S: 在线程池调用 convert(path, source_file)
+    R->>R: 校验大小并构造 SourceFile
+    R->>S: 在线程池调用 convert(file.file, source_file)
     S->>O: begin_request()
-    S->>M: convert(path)
+    S->>M: convert_stream(file_stream, StreamInfo)
     alt 发现可 OCR 图片
         M->>O: chat.completions.create(...)
         O-->>M: 解码后的 OCR 文本
@@ -191,8 +158,7 @@ sequenceDiagram
     S->>O: end_request()
     S->>S: OcrMarkdownCleaner.clean(markdown)
     S-->>R: ConvertResult
-    R->>U: finally: cleanup()
-    R-->>C: ConvertResponse
+    R-->>C: text/markdown 文件
 ```
 
 路由本身是异步函数，但 `ConvertService.convert()` 是同步函数，并通过 `run_in_threadpool()` 执行。因此请求仍然要等待转换完成，但不会直接阻塞 FastAPI 主事件循环；单 worker 服务可以同时接收多个请求，转换任务会竞争线程池和 oMLX 资源。
@@ -232,7 +198,6 @@ class ConvertResult:
 | 最大 OCR 输出 | `OMLX_OCR_MAX_TOKENS` | `4096` |
 | OCR temperature | `OMLX_OCR_TEMPERATURE` | `0` |
 | repetition penalty | `OMLX_OCR_REPETITION_PENALTY` | `1.1` |
-| 临时目录 | `TEMP_DIR` | `<项目根目录>/.runtime/uploads` |
 | 上传大小上限 | `MAX_UPLOAD_MB` | `100` |
 
 ### 6.3 `core/errors.py`
@@ -245,15 +210,9 @@ Exception
     └── UploadTooLargeError
 ```
 
-## 7. 上传与转换层
+## 7. 转换层
 
-### 7.1 `uploads/temp_uploads.py`
-
-`save_upload_file()` 每次读取 1 MiB，边写入 `Settings.temp_dir` 边累计大小。超过上限时立即删除临时文件并抛出 `UploadTooLargeError`。
-
-`TempUploadedFile.cleanup()` 使用 `unlink(missing_ok=True)`，由路由的 `finally` 调用，因此成功、失败和异常路径都会清理请求级临时文件。
-
-### 7.2 `convert/service.py`
+### 7.1 `convert/service.py`
 
 `ConvertService` 在初始化时装配并持有：
 
@@ -266,14 +225,14 @@ Exception
 转换步骤：
 
 1. 创建请求级 OCR 调用状态。
-2. 调用 MarkItDown 转换文件。
+2. 调用 MarkItDown 转换调用方提供的文件流。
 3. 收集本次 OCR 调用产生的 warning。
 4. 调用 `OcrMarkdownCleaner.clean()`。
 5. 返回 `ConvertResult`。
 
-`close()` 只负责释放外部客户端资源，不删除上传文件；上传文件由 API 层负责清理。
+`close()` 只负责释放外部客户端资源。服务不创建业务文件或转换结果文件。
 
-### 7.3 `convert/ocr_markdown_cleaner.py`
+### 7.2 `convert/ocr_markdown_cleaner.py`
 
 清理器只处理已知 OCR 协议噪声：`[Image OCR]` 包装、`<|det|>` 检测标签、坐标和已知的模型前导字符。它保留识别文字和普通 Markdown，不调用模型，也不重写全文。
 
@@ -292,7 +251,8 @@ MarkItDown(
 )
 ```
 
-它只负责调用第三方 `convert()` 并将异常包装成 `ConversionError`。
+它根据文件名和 MIME type 构造 `StreamInfo`，调用第三方 `convert_stream()`，
+并将异常包装成 `ConversionError`。
 
 ### 8.2 `integrations/omlx.py`
 
@@ -327,6 +287,8 @@ MarkItDown(
 ### 9.2 自动化测试
 
 - `tests/test_ocr_markdown_cleaner.py`：OCR 标记清理、普通 Markdown 保真和服务编排测试。
+- `tests/test_convert_api.py`：multipart 输入、Markdown 文件响应和对象存储端点移除。
+- `tests/test_markitdown_stream.py`：文件流和格式元信息向 MarkItDown 的传递。
 - `tests/test_omlx.py`：oMLX 请求参数、byte 解码、退化输出和截断 warning 测试。
 
 ### 9.3 独立实验
@@ -348,5 +310,5 @@ MarkItDown(
 
 ```bash
 rg -n "^(class |def |async def |@router\\.)" \
-  main.py api core convert integrations uploads tests experiments
+  main.py api core convert integrations tests experiments
 ```

@@ -7,7 +7,7 @@
         <mxCell id="p1_title" parent="1" style="align=left;verticalAlign=middle;fontSize=26;fontColor=#0F172A;;text;html=1;" value="&lt;b&gt;to-markdown 系统总览&lt;/b&gt;:容器、内部分层与外部依赖" vertex="1">
           <mxGeometry height="42" width="2100" x="50" y="25" as="geometry" />
         </mxCell>
-        <mxCell id="p1_sub" parent="1" style="align=left;verticalAlign=middle;fontSize=13;fontColor=#475569;;text;html=1;" value="一个 Python 进程承载 FastAPI 服务;外部依赖(MarkItDown、oMLX、TEMP_DIR)通过 integrations / uploads 层隔离。 实线箭头=运行时调用;虚线箭头=类型 / 配置依赖。" vertex="1">
+        <mxCell id="p1_sub" parent="1" style="align=left;verticalAlign=middle;fontSize=13;fontColor=#475569;;text;html=1;" value="一个 Python 进程承载 FastAPI 服务;multipart 文件流进入服务，Markdown 文件响应直接返回，外部存储始终由调用方负责。 实线箭头=运行时调用;虚线箭头=类型 / 配置依赖。" vertex="1">
           <mxGeometry height="26" width="2100" x="50" y="70" as="geometry" />
         </mxCell>
         <mxCell id="p1_legend_title" parent="1" style="align=left;verticalAlign=middle;fontSize=12;fontColor=#0F172A;;text;html=1;" value="&lt;b&gt;图例&lt;/b&gt;" vertex="1">
@@ -40,19 +40,19 @@
         <mxCell id="api_layer" parent="process" style="swimlane;html=1;rounded=1;horizontal=1;startSize=30;fillColor=#DBEAFE;swimlaneFillColor=#BFDBFE;strokeColor=#2563EB;fontColor=#1E3A8A;fontSize=13;" value="&lt;b&gt;api/ · HTTP 边界(不直接依赖 MarkItDown / OpenAI SDK)&lt;/b&gt;" vertex="1">
           <mxGeometry height="230" width="1120" x="30" y="210" as="geometry" />
         </mxCell>
-        <mxCell id="api_convert" parent="api_layer" style="fillColor=#FFFFFF;strokeColor=#94A3B8;fontColor=#1E293B;fontSize=13;;rounded=1;whiteSpace=wrap;html=1;" value="&lt;b&gt;convert.py&lt;/b&gt;&lt;br&gt;&lt;font style=&#39;font-size:11px&#39;&gt;POST /convert:通过 Depends 获取共享 ConvertService,保存上传文件并经线程池执行转换&lt;/font&gt;" vertex="1">
+        <mxCell id="api_convert" parent="api_layer" style="fillColor=#FFFFFF;strokeColor=#94A3B8;fontColor=#1E293B;fontSize=13;;rounded=1;whiteSpace=wrap;html=1;" value="&lt;b&gt;convert.py&lt;/b&gt;&lt;br&gt;&lt;font style=&#39;font-size:11px&#39;&gt;POST /convert:校验上传元信息，把 UploadFile.file 交给线程池转换，并返回 text/markdown&lt;/font&gt;" vertex="1">
           <mxGeometry height="160" width="340" x="20" y="50" as="geometry" />
         </mxCell>
         <mxCell id="api_health" parent="api_layer" style="fillColor=#FFFFFF;strokeColor=#94A3B8;fontColor=#1E293B;fontSize=13;;rounded=1;whiteSpace=wrap;html=1;" value="&lt;b&gt;health.py&lt;/b&gt;&lt;br&gt;&lt;font style=&#39;font-size:11px&#39;&gt;GET /health  ·  GET /health/omlx(后者调用 assert_omlx_reachable)&lt;/font&gt;" vertex="1">
           <mxGeometry height="160" width="340" x="380" y="50" as="geometry" />
         </mxCell>
-        <mxCell id="api_responses" parent="api_layer" style="fillColor=#FFFFFF;strokeColor=#94A3B8;fontColor=#1E293B;fontSize=13;;rounded=1;whiteSpace=wrap;html=1;" value="&lt;b&gt;models/ · dependencies.py&lt;/b&gt;&lt;br&gt;&lt;font style=&#39;font-size:11px&#39;&gt;按功能拆分 Pydantic 响应模型; get_convert_service 通过 Depends 提供 app.state 中的共享服务&lt;/font&gt;" vertex="1">
+        <mxCell id="api_responses" parent="api_layer" style="fillColor=#FFFFFF;strokeColor=#94A3B8;fontColor=#1E293B;fontSize=13;;rounded=1;whiteSpace=wrap;html=1;" value="&lt;b&gt;dependencies.py · Response&lt;/b&gt;&lt;br&gt;&lt;font style=&#39;font-size:11px&#39;&gt;get_convert_service 提供 app.state 中的共享服务；FastAPI Response 直接承载 Markdown 文件内容&lt;/font&gt;" vertex="1">
           <mxGeometry height="160" width="340" x="740" y="50" as="geometry" />
         </mxCell>
         <mxCell id="core_layer" parent="process" style="swimlane;html=1;rounded=1;horizontal=1;startSize=30;fillColor=#F1F5F9;swimlaneFillColor=#E2E8F0;strokeColor=#64748B;fontColor=#0F172A;fontSize=13;" value="&lt;b&gt;core/ · 基础设施(环境变量 / 异常 / 日志)&lt;/b&gt;" vertex="1">
           <mxGeometry height="190" width="1120" x="30" y="370" as="geometry" />
         </mxCell>
-        <mxCell id="core_config" parent="core_layer" style="fillColor=#FFFFFF;strokeColor=#94A3B8;fontColor=#1E293B;fontSize=13;;rounded=1;whiteSpace=wrap;html=1;" value="&lt;b&gt;config.py&lt;/b&gt;&lt;br&gt;&lt;font style=&#39;font-size:11px&#39;&gt;Settings dataclass + 模块级 SETTINGS 读取 OMLX_* / TEMP_DIR / MAX_UPLOAD_MB&lt;/font&gt;" vertex="1">
+        <mxCell id="core_config" parent="core_layer" style="fillColor=#FFFFFF;strokeColor=#94A3B8;fontColor=#1E293B;fontSize=13;;rounded=1;whiteSpace=wrap;html=1;" value="&lt;b&gt;config.py&lt;/b&gt;&lt;br&gt;&lt;font style=&#39;font-size:11px&#39;&gt;Settings dataclass + 模块级 SETTINGS 读取 OMLX_* / MAX_UPLOAD_MB&lt;/font&gt;" vertex="1">
           <mxGeometry height="120" width="340" x="20" y="50" as="geometry" />
         </mxCell>
         <mxCell id="core_errors" parent="core_layer" style="fillColor=#FFFFFF;strokeColor=#94A3B8;fontColor=#1E293B;fontSize=13;;rounded=1;whiteSpace=wrap;html=1;" value="&lt;b&gt;errors.py&lt;/b&gt;&lt;br&gt;&lt;font style=&#39;font-size:11px&#39;&gt;AppError 基类与 ConversionError / OmlxUnavailableError / UploadTooLargeError 三个子类&lt;/font&gt;" vertex="1">
@@ -61,10 +61,10 @@
         <mxCell id="core_logging" parent="core_layer" style="fillColor=#FFFFFF;strokeColor=#94A3B8;fontColor=#1E293B;fontSize=13;;rounded=1;whiteSpace=wrap;html=1;" value="&lt;b&gt;logging.py&lt;/b&gt;&lt;br&gt;&lt;font style=&#39;font-size:11px&#39;&gt;get_logger(name) 占位入口(未配置 handler)&lt;/font&gt;" vertex="1">
           <mxGeometry height="120" width="340" x="740" y="50" as="geometry" />
         </mxCell>
-        <mxCell id="storage_layer" parent="process" style="swimlane;html=1;rounded=1;horizontal=1;startSize=30;fillColor=#FEF3C7;swimlaneFillColor=#FDE68A;strokeColor=#D97706;fontColor=#78350F;fontSize=13;" value="&lt;b&gt;uploads/ · 请求级临时文件&lt;/b&gt;" vertex="1">
+        <mxCell id="storage_layer" parent="process" style="swimlane;html=1;rounded=1;horizontal=1;startSize=30;fillColor=#FEF3C7;swimlaneFillColor=#FDE68A;strokeColor=#D97706;fontColor=#78350F;fontSize=13;" value="&lt;b&gt;FastAPI UploadFile · 请求级输入流&lt;/b&gt;" vertex="1">
           <mxGeometry height="100" width="1120" x="30" y="580" as="geometry" />
         </mxCell>
-        <mxCell id="storage_temp" parent="storage_layer" style="fillColor=#FFFFFF;strokeColor=#94A3B8;fontColor=#1E293B;fontSize=13;;rounded=1;whiteSpace=wrap;html=1;" value="&lt;b&gt;temp_uploads.py&lt;/b&gt;&lt;br&gt;&lt;font style=&#39;font-size:11px&#39;&gt;save_upload_file 分块写盘 + 大小限制 + 超限删除;TempUploadedFile.cleanup() 在 finally 块调用&lt;/font&gt;" vertex="1">
+        <mxCell id="storage_temp" parent="storage_layer" style="fillColor=#FFFFFF;strokeColor=#94A3B8;fontColor=#1E293B;fontSize=13;;rounded=1;whiteSpace=wrap;html=1;" value="&lt;b&gt;UploadFile.file&lt;/b&gt;&lt;br&gt;&lt;font style=&#39;font-size:11px&#39;&gt;API 只读取文件名、类型和大小，并把可读二进制流交给 ConvertService；项目不创建业务文件路径&lt;/font&gt;" vertex="1">
           <mxGeometry height="30" width="1060" x="20" y="50" as="geometry" />
         </mxCell>
         <mxCell id="domain_layer" parent="process" style="swimlane;html=1;rounded=1;horizontal=1;startSize=30;fillColor=#F3E8FF;swimlaneFillColor=#E9D5FF;strokeColor=#9333EA;fontColor=#581C87;fontSize=13;" value="&lt;b&gt;convert/types.py · Convert 功能共享数据(不依赖 FastAPI / Pydantic)&lt;/b&gt;" vertex="1">
@@ -97,7 +97,7 @@
         <mxCell id="e_api_config" edge="1" entryX="0.5" entryY="0" exitX="0" exitY="0.5" parent="process" source="api_convert" style="endArrow=block;endFill=1;html=1;rounded=0;strokeColor=#0F172A;strokeWidth=2;fontSize=11;labelBackgroundColor=#F8FAFC;" target="core_config" value="SETTINGS">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="e_api_storage" edge="1" entryX="0.5" entryY="0" exitX="0" exitY="0.7" parent="process" source="api_convert" style="endArrow=block;endFill=1;html=1;rounded=0;strokeColor=#D97706;strokeWidth=2;fontSize=11;labelBackgroundColor=#F8FAFC;" target="storage_temp" value="await save_upload_file()">
+        <mxCell id="e_api_storage" edge="1" entryX="0.5" entryY="0" exitX="0" exitY="0.7" parent="process" source="api_convert" style="endArrow=block;endFill=1;html=1;rounded=0;strokeColor=#D97706;strokeWidth=2;fontSize=11;labelBackgroundColor=#F8FAFC;" target="storage_temp" value="await file.seek(0) / file.file">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
         <mxCell id="e_api_domain" edge="1" entryX="0" entryY="0.5" exitX="0.5" exitY="1" parent="process" source="api_convert" style="endArrow=block;endFill=1;dashed=1;html=1;rounded=0;strokeColor=#9333EA;strokeWidth=1;fontSize=11;labelBackgroundColor=#F8FAFC;" target="domain_models" value="构造 SourceFile">
@@ -129,31 +129,31 @@
         <mxCell id="e_errors_main" edge="1" entryX="0.5" entryY="1" exitX="0.5" exitY="0" parent="process" source="core_errors" style="endArrow=block;endFill=1;dashed=1;html=1;rounded=0;strokeColor=#0F172A;strokeWidth=1;fontSize=11;labelBackgroundColor=#F8FAFC;" target="main_box" value="AppError → JSON handler">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="ext_markitdown" parent="1" style="fillColor=#FCE7F3;strokeColor=#DB2777;fontColor=#831843;fontSize=15;;rounded=1;whiteSpace=wrap;html=1;" value="&lt;b&gt;MarkItDown(PyPI)&lt;/b&gt;&lt;br&gt;&lt;font style=&#39;font-size:12px&#39;&gt;MarkItDown().convert(path)&lt;br&gt;内置 converter 路由:PDF / DOCX / XLSX / HTML / 图片&lt;br&gt;识别文件类型并生成基础 Markdown&lt;/font&gt;" vertex="1">
+        <mxCell id="ext_markitdown" parent="1" style="fillColor=#FCE7F3;strokeColor=#DB2777;fontColor=#831843;fontSize=15;;rounded=1;whiteSpace=wrap;html=1;" value="&lt;b&gt;MarkItDown(PyPI)&lt;/b&gt;&lt;br&gt;&lt;font style=&#39;font-size:12px&#39;&gt;MarkItDown().convert_stream(file_stream, stream_info)&lt;br&gt;内置 converter 路由:PDF / DOCX / XLSX / HTML / 图片&lt;br&gt;识别文件类型并生成基础 Markdown&lt;/font&gt;" vertex="1">
           <mxGeometry height="200" width="410" x="1720" y="280" as="geometry" />
         </mxCell>
         <mxCell id="ext_omlx" parent="1" style="fillColor=#FEE2E2;strokeColor=#DC2626;fontColor=#7F1D1D;fontSize=15;;rounded=1;whiteSpace=wrap;html=1;" value="&lt;b&gt;oMLX 独立 HTTP 服务&lt;/b&gt;&lt;br&gt;&lt;font style=&#39;font-size:12px&#39;&gt;MLX + Metal 推理&lt;br&gt;管理 OCR / VLM 模型权重&lt;br&gt;OpenAI 兼容:POST /v1/chat/completions&lt;br&gt;Token 输出经过 byte-level tokenizer&lt;/font&gt;" vertex="1">
           <mxGeometry height="220" width="410" x="1720" y="540" as="geometry" />
         </mxCell>
-        <mxCell id="ext_fs" parent="1" style="fillColor=#FEF9C3;strokeColor=#CA8A04;fontColor=#713F12;fontSize=15;;rounded=1;whiteSpace=wrap;html=1;" value="&lt;b&gt;TEMP_DIR 文件系统&lt;/b&gt;&lt;br&gt;&lt;font style=&#39;font-size:12px&#39;&gt;默认:&lt;项目根&gt;/.runtime/uploads&lt;br&gt;TEMP_DIR 直接指定最终目录;保存上传副本,请求结束删除&lt;/font&gt;" vertex="1">
+        <mxCell id="ext_fs" parent="1" style="fillColor=#FEF9C3;strokeColor=#CA8A04;fontColor=#713F12;fontSize=15;;rounded=1;whiteSpace=wrap;html=1;" value="&lt;b&gt;调用方文件 / 对象存储&lt;/b&gt;&lt;br&gt;&lt;font style=&#39;font-size:12px&#39;&gt;调用前读取源文件并构造 multipart&lt;br&gt;调用后保存 Markdown 响应；不属于本服务运行时依赖&lt;/font&gt;" vertex="1">
           <mxGeometry height="120" width="410" x="1720" y="820" as="geometry" />
         </mxCell>
         <mxCell id="ext_demo" parent="1" style="fillColor=#F5F3FF;strokeColor=#7C3AED;fontColor=#4C1D95;fontSize=13;;rounded=1;whiteSpace=wrap;html=1;" value="&lt;b&gt;experiments/ · 排错 / 研究&lt;/b&gt;&lt;br&gt;&lt;font style=&#39;font-size:12px&#39;&gt;omlx_ocr_degeneration 不进入运行时路径&lt;br&gt;用于复现和分析 OCR 模型输出退化&lt;/font&gt;" vertex="1">
           <mxGeometry height="110" width="410" x="1720" y="1000" as="geometry" />
         </mxCell>
-        <mxCell id="e_mark_ext" edge="1" entryX="0" entryY="0.5" exitX="1" exitY="0.5" parent="1" source="ad_mark" style="endArrow=block;endFill=1;html=1;rounded=0;strokeColor=#DB2777;strokeWidth=2;fontSize=11;labelBackgroundColor=#FFFFFF;" target="ext_markitdown" value="MarkItDown().convert(path)">
+        <mxCell id="e_mark_ext" edge="1" entryX="0" entryY="0.5" exitX="1" exitY="0.5" parent="1" source="ad_mark" style="endArrow=block;endFill=1;html=1;rounded=0;strokeColor=#DB2777;strokeWidth=2;fontSize=11;labelBackgroundColor=#FFFFFF;" target="ext_markitdown" value="MarkItDown().convert_stream(...)">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
         <mxCell id="e_omlx_ext" edge="1" entryX="0" entryY="0.5" exitX="1" exitY="0.5" parent="1" source="ad_omlx" style="endArrow=block;endFill=1;html=1;rounded=0;strokeColor=#DC2626;strokeWidth=2;fontSize=11;labelBackgroundColor=#FFFFFF;" target="ext_omlx" value="POST /v1/chat/completions">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="e_storage_ext" edge="1" entryX="0" entryY="0.5" exitX="1" exitY="0.5" parent="1" source="storage_temp" style="endArrow=block;endFill=1;html=1;rounded=0;strokeColor=#CA8A04;strokeWidth=2;fontSize=11;labelBackgroundColor=#FFFFFF;" target="ext_fs" value="读 / 写 / unlink">
+        <mxCell id="e_storage_ext" edge="1" entryX="0" entryY="0.5" exitX="1" exitY="0.5" parent="1" source="storage_temp" style="endArrow=none;dashed=1;html=1;rounded=0;strokeColor=#CA8A04;strokeWidth=1;fontSize=11;labelBackgroundColor=#FFFFFF;" target="ext_fs" value="职责边界：服务不访问">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
         <mxCell id="e_client_api" edge="1" entryX="0" entryY="0.5" exitX="1" exitY="0.5" parent="1" source="client" style="endArrow=block;endFill=1;html=1;rounded=0;strokeColor=#0284C7;strokeWidth=3;fontSize=12;labelBackgroundColor=#FFFFFF;" target="api_convert" value="POST /convert multipart">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="p1_note" parent="1" style="align=left;verticalAlign=middle;fontSize=12;fontColor=#1E293B;;text;html=1;" value="&lt;b&gt;错误处理统一收口&lt;/b&gt;:uploads / convert / integrations 抛出的 AppError 由 main.py 的 handle_app_error 转成统一 JSON(413 upload_too_large / 422 conversion_failed / 503 omlx_unavailable)。 调用方仅看到 error code,不暴露 Python traceback。" vertex="1">
+        <mxCell id="p1_note" parent="1" style="align=left;verticalAlign=middle;fontSize=12;fontColor=#1E293B;;text;html=1;" value="&lt;b&gt;错误处理统一收口&lt;/b&gt;:api / convert / integrations 抛出的 AppError 由 main.py 的 handle_app_error 转成统一 JSON(413 upload_too_large / 422 conversion_failed / 503 omlx_unavailable)。 成功响应只有 Markdown 文件，调用方负责后续存储。" vertex="1">
           <mxGeometry height="60" width="2100" x="50" y="1420" as="geometry" />
         </mxCell>
       </root>
@@ -164,7 +164,7 @@
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
-        <mxCell id="p2_title" parent="1" style="align=left;verticalAlign=middle;fontSize=26;fontColor=#0F172A;;text;html=1;" value="&lt;b&gt;POST /convert 请求全生命周期&lt;/b&gt;:从 multipart 到达 ConvertResponse 返回" vertex="1">
+        <mxCell id="p2_title" parent="1" style="align=left;verticalAlign=middle;fontSize=26;fontColor=#0F172A;;text;html=1;" value="&lt;b&gt;POST /convert 请求全生命周期&lt;/b&gt;:从 multipart 文件流到 Markdown 文件响应" vertex="1">
           <mxGeometry height="42" width="2300" x="50" y="25" as="geometry" />
         </mxCell>
         <mxCell id="p2_sub" parent="1" style="align=left;verticalAlign=middle;fontSize=13;fontColor=#475569;;text;html=1;" value="纵向为时间轴。每一行=一次函数调用或重要步骤;蓝色=成功路径,绿色=外部依赖,紫色=异步/线程边界,灰色=内部步骤。 自调用(self-call)用右侧虚线小框表示函数内部的判断或组装步骤。" vertex="1">
@@ -182,7 +182,7 @@
         <mxCell id="config" parent="1" style="fillColor=#F1F5F9;strokeColor=#64748B;fontColor=#0F172A;fontSize=12;;rounded=1;whiteSpace=wrap;html=1;" value="&lt;b&gt;core/config.py&lt;/b&gt;" vertex="1">
           <mxGeometry height="70" width="200" x="684" y="110" as="geometry" />
         </mxCell>
-        <mxCell id="uploads" parent="1" style="fillColor=#FEF3C7;strokeColor=#D97706;fontColor=#78350F;fontSize=12;;rounded=1;whiteSpace=wrap;html=1;" value="&lt;b&gt;uploads/temp_uploads.py&lt;/b&gt;" vertex="1">
+        <mxCell id="uploads" parent="1" style="fillColor=#FEF3C7;strokeColor=#D97706;fontColor=#78350F;fontSize=12;;rounded=1;whiteSpace=wrap;html=1;" value="&lt;b&gt;UploadFile.file&lt;/b&gt;" vertex="1">
           <mxGeometry height="70" width="200" x="892" y="110" as="geometry" />
         </mxCell>
         <mxCell id="service" parent="1" style="fillColor=#DCFCE7;strokeColor=#16A34A;fontColor=#14532D;fontSize=12;;rounded=1;whiteSpace=wrap;html=1;" value="&lt;b&gt;convert/service.py&lt;/b&gt;" vertex="1">
@@ -200,7 +200,7 @@
         <mxCell id="omlx" parent="1" style="fillColor=#FEE2E2;strokeColor=#DC2626;fontColor=#7F1D1D;fontSize=12;;rounded=1;whiteSpace=wrap;html=1;" value="&lt;b&gt;oMLX(外部服务)&lt;/b&gt;" vertex="1">
           <mxGeometry height="70" width="200" x="1932" y="110" as="geometry" />
         </mxCell>
-        <mxCell id="fs" parent="1" style="fillColor=#FEF9C3;strokeColor=#CA8A04;fontColor=#713F12;fontSize=12;;rounded=1;whiteSpace=wrap;html=1;" value="&lt;b&gt;TEMP_DIR 文件系统&lt;/b&gt;" vertex="1">
+        <mxCell id="fs" parent="1" style="fillColor=#FEF9C3;strokeColor=#CA8A04;fontColor=#713F12;fontSize=12;;rounded=1;whiteSpace=wrap;html=1;" value="&lt;b&gt;调用方存储（服务外）&lt;/b&gt;" vertex="1">
           <mxGeometry height="70" width="200" x="2140" y="110" as="geometry" />
         </mxCell>
         <mxCell id="client_life" edge="1" parent="1" style="endArrow=none;html=1;rounded=0;strokeColor=#94A3B8;strokeWidth=1;dashed=1;" value="">
@@ -281,7 +281,7 @@
             <mxPoint x="576" y="256" as="targetPoint" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="step_302_2_3" edge="1" parent="1" style="endArrow=block;endFill=1;html=1;rounded=0;strokeColor=#2563EB;strokeWidth=2;fontSize=11;labelBackgroundColor=#FFFFFF;" value="应用导入时读取 SETTINGS(omlx_*, temp_dir, max_upload_mb)">
+        <mxCell id="step_302_2_3" edge="1" parent="1" style="endArrow=block;endFill=1;html=1;rounded=0;strokeColor=#2563EB;strokeWidth=2;fontSize=11;labelBackgroundColor=#FFFFFF;" value="应用导入时读取 SETTINGS(omlx_*, max_upload_mb)">
           <mxGeometry relative="1" as="geometry">
             <mxPoint x="576" y="302" as="sourcePoint" />
             <mxPoint x="784" y="302" as="targetPoint" />
@@ -293,25 +293,25 @@
             <mxPoint x="576" y="340" as="targetPoint" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="step_368_2_4" edge="1" parent="1" style="endArrow=block;endFill=1;dashed=1;html=1;rounded=0;strokeColor=#7C3AED;strokeWidth=1;fontSize=11;labelBackgroundColor=#FFFFFF;" value="await save_upload_file(file, settings)">
+        <mxCell id="step_368_2_4" edge="1" parent="1" style="endArrow=block;endFill=1;dashed=1;html=1;rounded=0;strokeColor=#7C3AED;strokeWidth=1;fontSize=11;labelBackgroundColor=#FFFFFF;" value="校验 file.size；await file.seek(0)；取得 file.file">
           <mxGeometry relative="1" as="geometry">
             <mxPoint x="576" y="368" as="sourcePoint" />
             <mxPoint x="992" y="368" as="targetPoint" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="step_406_4_10" edge="1" parent="1" style="endArrow=block;endFill=1;html=1;rounded=0;strokeColor=#0F766E;strokeWidth=2;fontSize=11;labelBackgroundColor=#FFFFFF;" value="settings.temp_dir.mkdir + NamedTemporaryFile(delete=False, suffix=...)">
+        <mxCell id="step_406_4_10" edge="1" parent="1" style="endArrow=none;dashed=1;html=1;rounded=0;strokeColor=#CA8A04;strokeWidth=1;fontSize=11;labelBackgroundColor=#FFFFFF;" value="职责边界：服务不根据 object key 读取文件，也不创建存储路径">
           <mxGeometry relative="1" as="geometry">
             <mxPoint x="992" y="406" as="sourcePoint" />
             <mxPoint x="2240" y="406" as="targetPoint" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="step_444_10_4" edge="1" parent="1" style="endArrow=block;endFill=1;html=1;rounded=0;strokeColor=#0F766E;strokeWidth=2;fontSize=11;labelBackgroundColor=#FFFFFF;" value="分块 await upload_file.read(1 MiB) → tmp.write(chunk)">
+        <mxCell id="step_444_10_4" edge="1" parent="1" style="endArrow=none;dashed=1;html=1;rounded=0;strokeColor=#CA8A04;strokeWidth=1;fontSize=11;labelBackgroundColor=#FFFFFF;" value="调用方在请求前读取源文件，在响应后决定 Markdown 的保存位置">
           <mxGeometry relative="1" as="geometry">
             <mxPoint x="2240" y="444" as="sourcePoint" />
             <mxPoint x="992" y="444" as="targetPoint" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="step_482_4_2" edge="1" parent="1" style="endArrow=block;endFill=1;html=1;rounded=0;strokeColor=#2563EB;strokeWidth=2;fontSize=11;labelBackgroundColor=#FFFFFF;" value="TempUploadedFile(path, size_bytes)">
+        <mxCell id="step_482_4_2" edge="1" parent="1" style="endArrow=block;endFill=1;html=1;rounded=0;strokeColor=#2563EB;strokeWidth=2;fontSize=11;labelBackgroundColor=#FFFFFF;" value="BinaryIO + SourceFile(filename, content_type, size_bytes)">
           <mxGeometry relative="1" as="geometry">
             <mxPoint x="992" y="482" as="sourcePoint" />
             <mxPoint x="576" y="482" as="targetPoint" />
@@ -335,7 +335,7 @@
         <mxCell id="async_text_632" parent="1" style="fillColor=#F5F3FF;strokeColor=#7C3AED;dashed=1;fontColor=#4C1D95;fontSize=11;;rounded=1;whiteSpace=wrap;html=1;" value="— — — — — 切换到 worker thread (run_in_threadpool) — — — — —" vertex="1">
           <mxGeometry height="26" width="2280" x="60" y="618" as="geometry" />
         </mxCell>
-        <mxCell id="step_664_2_5" edge="1" parent="1" style="endArrow=block;endFill=1;html=1;rounded=0;strokeColor=#2563EB;strokeWidth=2;fontSize=11;labelBackgroundColor=#FFFFFF;" value="service.convert(path, source_file)">
+        <mxCell id="step_664_2_5" edge="1" parent="1" style="endArrow=block;endFill=1;html=1;rounded=0;strokeColor=#2563EB;strokeWidth=2;fontSize=11;labelBackgroundColor=#FFFFFF;" value="service.convert(file_stream, source_file)">
           <mxGeometry relative="1" as="geometry">
             <mxPoint x="576" y="664" as="sourcePoint" />
             <mxPoint x="1200" y="664" as="targetPoint" />
@@ -383,13 +383,13 @@
             <mxPoint x="1616" y="946" as="targetPoint" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="step_978_5_6" edge="1" parent="1" style="endArrow=block;endFill=1;html=1;rounded=0;strokeColor=#2563EB;strokeWidth=2;fontSize=11;labelBackgroundColor=#FFFFFF;" value="markitdown_converter.convert(file_path)">
+        <mxCell id="step_978_5_6" edge="1" parent="1" style="endArrow=block;endFill=1;html=1;rounded=0;strokeColor=#2563EB;strokeWidth=2;fontSize=11;labelBackgroundColor=#FFFFFF;" value="markitdown_converter.convert(file_stream, filename, content_type)">
           <mxGeometry relative="1" as="geometry">
             <mxPoint x="1200" y="978" as="sourcePoint" />
             <mxPoint x="1408" y="978" as="targetPoint" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="step_1016_6_8" edge="1" parent="1" style="endArrow=block;endFill=1;html=1;rounded=0;strokeColor=#0F766E;strokeWidth=2;fontSize=11;labelBackgroundColor=#FFFFFF;" value="MarkItDown().convert(str(file_path))">
+        <mxCell id="step_1016_6_8" edge="1" parent="1" style="endArrow=block;endFill=1;html=1;rounded=0;strokeColor=#0F766E;strokeWidth=2;fontSize=11;labelBackgroundColor=#FFFFFF;" value="MarkItDown().convert_stream(file_stream, stream_info=StreamInfo(...))">
           <mxGeometry relative="1" as="geometry">
             <mxPoint x="1408" y="1016" as="sourcePoint" />
             <mxPoint x="1824" y="1016" as="targetPoint" />
@@ -476,34 +476,34 @@
         <mxCell id="async_text_1564" parent="1" style="fillColor=#F5F3FF;strokeColor=#7C3AED;dashed=1;fontColor=#4C1D95;fontSize=11;;rounded=1;whiteSpace=wrap;html=1;" value="— — — — — 回到 async 事件循环 — — — — —" vertex="1">
           <mxGeometry height="26" width="2280" x="60" y="1550" as="geometry" />
         </mxCell>
-        <mxCell id="self_1596_2" parent="1" style="fillColor=#F8FAFC;strokeColor=#94A3B8;dashed=1;fontColor=#1E293B;fontSize=11;;rounded=1;whiteSpace=wrap;html=1;" value="ConvertResponse(...) ← 显式映射字段" vertex="1">
+        <mxCell id="self_1596_2" parent="1" style="fillColor=#F8FAFC;strokeColor=#94A3B8;dashed=1;fontColor=#1E293B;fontSize=11;;rounded=1;whiteSpace=wrap;html=1;" value="Response(content=result.markdown, media_type='text/markdown')">
           <mxGeometry height="26" width="1746" x="594" y="1582" as="geometry" />
         </mxCell>
-        <mxCell id="step_1634_2_4" edge="1" parent="1" style="endArrow=block;endFill=1;html=1;rounded=0;strokeColor=#2563EB;strokeWidth=2;fontSize=11;labelBackgroundColor=#FFFFFF;" value="finally: temp_file.cleanup()">
+        <mxCell id="step_1634_2_4" edge="1" parent="1" style="endArrow=block;endFill=1;html=1;rounded=0;strokeColor=#2563EB;strokeWidth=2;fontSize=11;labelBackgroundColor=#FFFFFF;" value="Content-Disposition: attachment; filename*=UTF-8''...md">
           <mxGeometry relative="1" as="geometry">
             <mxPoint x="576" y="1634" as="sourcePoint" />
             <mxPoint x="992" y="1634" as="targetPoint" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="step_1672_4_10" edge="1" parent="1" style="endArrow=block;endFill=1;html=1;rounded=0;strokeColor=#0F766E;strokeWidth=2;fontSize=11;labelBackgroundColor=#FFFFFF;" value="Path.unlink(missing_ok=True)">
+        <mxCell id="step_1672_4_10" edge="1" parent="1" style="endArrow=none;dashed=1;html=1;rounded=0;strokeColor=#CA8A04;strokeWidth=1;fontSize=11;labelBackgroundColor=#FFFFFF;" value="服务不落盘；调用方接收响应后自行保存">
           <mxGeometry relative="1" as="geometry">
             <mxPoint x="992" y="1672" as="sourcePoint" />
             <mxPoint x="2240" y="1672" as="targetPoint" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="step_1698_2_1" edge="1" parent="1" style="endArrow=block;endFill=1;html=1;rounded=0;strokeColor=#2563EB;strokeWidth=2;fontSize=11;labelBackgroundColor=#FFFFFF;" value="JSONResponse {markdown, source_filename, content_type, normalized, warnings}">
+        <mxCell id="step_1698_2_1" edge="1" parent="1" style="endArrow=block;endFill=1;html=1;rounded=0;strokeColor=#2563EB;strokeWidth=2;fontSize=11;labelBackgroundColor=#FFFFFF;" value="Response: Markdown UTF-8 bytes">
           <mxGeometry relative="1" as="geometry">
             <mxPoint x="576" y="1698" as="sourcePoint" />
             <mxPoint x="368" y="1698" as="targetPoint" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="step_1736_1_0" edge="1" parent="1" style="endArrow=block;endFill=1;html=1;rounded=0;strokeColor=#2563EB;strokeWidth=2;fontSize=11;labelBackgroundColor=#FFFFFF;" value="200 OK application/json">
+        <mxCell id="step_1736_1_0" edge="1" parent="1" style="endArrow=block;endFill=1;html=1;rounded=0;strokeColor=#2563EB;strokeWidth=2;fontSize=11;labelBackgroundColor=#FFFFFF;" value="200 OK text/markdown; charset=utf-8">
           <mxGeometry relative="1" as="geometry">
             <mxPoint x="368" y="1736" as="sourcePoint" />
             <mxPoint x="160" y="1736" as="targetPoint" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="p2_err_box" parent="1" style="fillColor=#FEE2E2;strokeColor=#DC2626;fontColor=#7F1D1D;fontSize=13;;rounded=1;whiteSpace=wrap;html=1;" value="&lt;b&gt;错误路径(任意层抛 AppError)&lt;/b&gt;&lt;br&gt;&lt;font style=&#39;font-size:12px&#39;&gt;· uploads 写入超限 → UploadTooLargeError → &lt;b&gt;413 upload_too_large&lt;/b&gt;&lt;br&gt;· integrations.omlx.assert_omlx_reachable 失败 → OmlxUnavailableError → &lt;b&gt;503 omlx_unavailable&lt;/b&gt;&lt;br&gt;· integrations.markitdown.convert 捕获任意异常 → ConversionError → &lt;b&gt;422 conversion_failed&lt;/b&gt;&lt;br&gt;所有 AppError 在 main.py 由 handle_app_error 转为 &lt;code&gt;{error, message}&lt;/code&gt; JSON;调用方看不到 Python traceback。&lt;/font&gt;" vertex="1">
+        <mxCell id="p2_err_box" parent="1" style="fillColor=#FEE2E2;strokeColor=#DC2626;fontColor=#7F1D1D;fontSize=13;;rounded=1;whiteSpace=wrap;html=1;" value="&lt;b&gt;错误路径(任意层抛 AppError)&lt;/b&gt;&lt;br&gt;&lt;font style=&#39;font-size:12px&#39;&gt;· UploadFile.size 超限 → UploadTooLargeError → &lt;b&gt;413 upload_too_large&lt;/b&gt;&lt;br&gt;· integrations.omlx.assert_omlx_reachable 失败 → OmlxUnavailableError → &lt;b&gt;503 omlx_unavailable&lt;/b&gt;&lt;br&gt;· integrations.markitdown.convert 捕获任意异常 → ConversionError → &lt;b&gt;422 conversion_failed&lt;/b&gt;&lt;br&gt;所有 AppError 在 main.py 由 handle_app_error 转为 &lt;code&gt;{error, message}&lt;/code&gt; JSON;成功响应始终是 Markdown 文件。&lt;/font&gt;" vertex="1">
           <mxGeometry height="170" width="2280" x="60" y="1940" as="geometry" />
         </mxCell>
       </root>
@@ -598,13 +598,13 @@
         <mxCell id="p3_c_3_1" parent="1" style="fillColor=#F8FAFC;strokeColor=#E2E8F0;fontColor=#1E293B;fontSize=11;align=left;verticalAlign=middle;spacingLeft=8;;rounded=1;whiteSpace=wrap;html=1;" value="convert_file(file)" vertex="1">
           <mxGeometry height="50" width="240" x="280" y="292" as="geometry" />
         </mxCell>
-        <mxCell id="p3_c_3_2" parent="1" style="fillColor=#F8FAFC;strokeColor=#E2E8F0;fontColor=#1E293B;fontSize=11;align=left;verticalAlign=middle;spacingLeft=8;;rounded=1;whiteSpace=wrap;html=1;" value="HTTP 边界处理器:保存上传 → 构造转换参数 → 线程池调用 ConvertService → finally 清理 → 返回 ConvertResponse。" vertex="1">
+        <mxCell id="p3_c_3_2" parent="1" style="fillColor=#F8FAFC;strokeColor=#E2E8F0;fontColor=#1E293B;fontSize=11;align=left;verticalAlign=middle;spacingLeft=8;;rounded=1;whiteSpace=wrap;html=1;" value="HTTP 边界处理器:校验元信息 → 取得 UploadFile.file → 线程池调用 ConvertService → 返回 Markdown Response。" vertex="1">
           <mxGeometry height="50" width="600" x="520" y="292" as="geometry" />
         </mxCell>
         <mxCell id="p3_c_3_3" parent="1" style="fillColor=#F8FAFC;strokeColor=#E2E8F0;fontColor=#1E293B;fontSize=11;align=left;verticalAlign=middle;spacingLeft=8;;rounded=1;whiteSpace=wrap;html=1;" value="file: UploadFile" vertex="1">
           <mxGeometry height="50" width="520" x="1120" y="292" as="geometry" />
         </mxCell>
-        <mxCell id="p3_c_3_4" parent="1" style="fillColor=#F8FAFC;strokeColor=#E2E8F0;fontColor=#1E293B;fontSize=11;align=left;verticalAlign=middle;spacingLeft=8;;rounded=1;whiteSpace=wrap;html=1;" value="ConvertResponse" vertex="1">
+        <mxCell id="p3_c_3_4" parent="1" style="fillColor=#F8FAFC;strokeColor=#E2E8F0;fontColor=#1E293B;fontSize=11;align=left;verticalAlign=middle;spacingLeft=8;;rounded=1;whiteSpace=wrap;html=1;" value="Response(text/markdown)" vertex="1">
           <mxGeometry height="50" width="280" x="1640" y="292" as="geometry" />
         </mxCell>
         <mxCell id="p3_c_3_5" parent="1" style="fillColor=#F8FAFC;strokeColor=#E2E8F0;fontColor=#1E293B;fontSize=11;align=left;verticalAlign=middle;spacingLeft=8;;rounded=1;whiteSpace=wrap;html=1;" value="UploadTooLargeError / OmlxUnavailableError / ConversionError" vertex="1">
@@ -646,19 +646,19 @@
         <mxCell id="p3_c_5_5" parent="1" style="fillColor=#F8FAFC;strokeColor=#E2E8F0;fontColor=#1E293B;fontSize=11;align=left;verticalAlign=middle;spacingLeft=8;;rounded=1;whiteSpace=wrap;html=1;" value="OmlxUnavailableError → 503" vertex="1">
           <mxGeometry height="50" width="280" x="1920" y="392" as="geometry" />
         </mxCell>
-        <mxCell id="p3_f_6" parent="1" style="fillColor=#DBEAFE;strokeColor=#2563EB;fontColor=#2563EB;fontSize=12;;rounded=1;whiteSpace=wrap;html=1;" value="&lt;b&gt;api/models/convert.py&lt;/b&gt;" vertex="1">
+        <mxCell id="p3_f_6" parent="1" style="fillColor=#DBEAFE;strokeColor=#2563EB;fontColor=#2563EB;fontSize=12;;rounded=1;whiteSpace=wrap;html=1;" value="&lt;b&gt;fastapi.responses&lt;/b&gt;" vertex="1">
           <mxGeometry height="50" width="230" x="50" y="442" as="geometry" />
         </mxCell>
-        <mxCell id="p3_c_6_1" parent="1" style="fillColor=#FFFFFF;strokeColor=#E2E8F0;fontColor=#1E293B;fontSize=11;align=left;verticalAlign=middle;spacingLeft=8;;rounded=1;whiteSpace=wrap;html=1;" value="ConvertResponse" vertex="1">
+        <mxCell id="p3_c_6_1" parent="1" style="fillColor=#FFFFFF;strokeColor=#E2E8F0;fontColor=#1E293B;fontSize=11;align=left;verticalAlign=middle;spacingLeft=8;;rounded=1;whiteSpace=wrap;html=1;" value="Response" vertex="1">
           <mxGeometry height="50" width="240" x="280" y="442" as="geometry" />
         </mxCell>
-        <mxCell id="p3_c_6_2" parent="1" style="fillColor=#FFFFFF;strokeColor=#E2E8F0;fontColor=#1E293B;fontSize=11;align=left;verticalAlign=middle;spacingLeft=8;;rounded=1;whiteSpace=wrap;html=1;" value="POST /convert 的成功响应 Pydantic 模型:markdown / 元数据 / normalized / warnings。" vertex="1">
+        <mxCell id="p3_c_6_2" parent="1" style="fillColor=#FFFFFF;strokeColor=#E2E8F0;fontColor=#1E293B;fontSize=11;align=left;verticalAlign=middle;spacingLeft=8;;rounded=1;whiteSpace=wrap;html=1;" value="POST /convert 的成功响应载体：正文为 Markdown，响应头给出 Markdown 文件名。" vertex="1">
           <mxGeometry height="50" width="600" x="520" y="442" as="geometry" />
         </mxCell>
-        <mxCell id="p3_c_6_3" parent="1" style="fillColor=#FFFFFF;strokeColor=#E2E8F0;fontColor=#1E293B;fontSize=11;align=left;verticalAlign=middle;spacingLeft=8;;rounded=1;whiteSpace=wrap;html=1;" value="markdown, source_filename, content_type, normalized, warnings" vertex="1">
+        <mxCell id="p3_c_6_3" parent="1" style="fillColor=#FFFFFF;strokeColor=#E2E8F0;fontColor=#1E293B;fontSize=11;align=left;verticalAlign=middle;spacingLeft=8;;rounded=1;whiteSpace=wrap;html=1;" value="content, media_type, headers" vertex="1">
           <mxGeometry height="50" width="520" x="1120" y="442" as="geometry" />
         </mxCell>
-        <mxCell id="p3_c_6_4" parent="1" style="fillColor=#FFFFFF;strokeColor=#E2E8F0;fontColor=#1E293B;fontSize=11;align=left;verticalAlign=middle;spacingLeft=8;;rounded=1;whiteSpace=wrap;html=1;" value="—(Pydantic BaseModel)" vertex="1">
+        <mxCell id="p3_c_6_4" parent="1" style="fillColor=#FFFFFF;strokeColor=#E2E8F0;fontColor=#1E293B;fontSize=11;align=left;verticalAlign=middle;spacingLeft=8;;rounded=1;whiteSpace=wrap;html=1;" value="Response" vertex="1">
           <mxGeometry height="50" width="280" x="1640" y="442" as="geometry" />
         </mxCell>
         <mxCell id="p3_c_6_5" parent="1" style="fillColor=#FFFFFF;strokeColor=#E2E8F0;fontColor=#1E293B;fontSize=11;align=left;verticalAlign=middle;spacingLeft=8;;rounded=1;whiteSpace=wrap;html=1;" value="—" vertex="1">
@@ -706,7 +706,7 @@
         <mxCell id="p3_c_9_1" parent="1" style="fillColor=#F8FAFC;strokeColor=#E2E8F0;fontColor=#1E293B;fontSize=11;align=left;verticalAlign=middle;spacingLeft=8;;rounded=1;whiteSpace=wrap;html=1;" value="Settings" vertex="1">
           <mxGeometry height="50" width="240" x="280" y="592" as="geometry" />
         </mxCell>
-        <mxCell id="p3_c_9_2" parent="1" style="fillColor=#F8FAFC;strokeColor=#E2E8F0;fontColor=#1E293B;fontSize=11;align=left;verticalAlign=middle;spacingLeft=8;;rounded=1;whiteSpace=wrap;html=1;" value="不可变 dataclass,保存 omlx_* / temp_dir / max_upload_mb。模块导入时构造 SETTINGS。" vertex="1">
+        <mxCell id="p3_c_9_2" parent="1" style="fillColor=#F8FAFC;strokeColor=#E2E8F0;fontColor=#1E293B;fontSize=11;align=left;verticalAlign=middle;spacingLeft=8;;rounded=1;whiteSpace=wrap;html=1;" value="不可变 dataclass,保存 omlx_* / max_upload_mb。模块导入时构造 SETTINGS。" vertex="1">
           <mxGeometry height="50" width="600" x="520" y="592" as="geometry" />
         </mxCell>
         <mxCell id="p3_c_9_3" parent="1" style="fillColor=#F8FAFC;strokeColor=#E2E8F0;fontColor=#1E293B;fontSize=11;align=left;verticalAlign=middle;spacingLeft=8;;rounded=1;whiteSpace=wrap;html=1;" value="@dataclass(frozen=True)" vertex="1">
@@ -868,7 +868,7 @@
         <mxCell id="p3_c_18_1" parent="1" style="fillColor=#FFFFFF;strokeColor=#E2E8F0;fontColor=#1E293B;fontSize=11;align=left;verticalAlign=middle;spacingLeft=8;;rounded=1;whiteSpace=wrap;html=1;" value="ConvertResult" vertex="1">
           <mxGeometry height="50" width="240" x="280" y="1042" as="geometry" />
         </mxCell>
-        <mxCell id="p3_c_18_2" parent="1" style="fillColor=#FFFFFF;strokeColor=#E2E8F0;fontColor=#1E293B;fontSize=11;align=left;verticalAlign=middle;spacingLeft=8;;rounded=1;whiteSpace=wrap;html=1;" value="服务层完成转换后的内部结果,由 convert_file 显式映射为 ConvertResponse。" vertex="1">
+        <mxCell id="p3_c_18_2" parent="1" style="fillColor=#FFFFFF;strokeColor=#E2E8F0;fontColor=#1E293B;fontSize=11;align=left;verticalAlign=middle;spacingLeft=8;;rounded=1;whiteSpace=wrap;html=1;" value="服务层完成转换后的内部结果,由 convert_file 取出 Markdown 并构造 HTTP Response。" vertex="1">
           <mxGeometry height="50" width="600" x="520" y="1042" as="geometry" />
         </mxCell>
         <mxCell id="p3_c_18_3" parent="1" style="fillColor=#FFFFFF;strokeColor=#E2E8F0;fontColor=#1E293B;fontSize=11;align=left;verticalAlign=middle;spacingLeft=8;;rounded=1;whiteSpace=wrap;html=1;" value="@dataclass(frozen=True)" vertex="1">
@@ -943,7 +943,7 @@
         <mxCell id="p3_c_22_2" parent="1" style="fillColor=#FFFFFF;strokeColor=#E2E8F0;fontColor=#1E293B;fontSize=11;align=left;verticalAlign=middle;spacingLeft=8;;rounded=1;whiteSpace=wrap;html=1;" value="编排完整转换:构建转换器/OCR client → MarkItDown 按需 OCR → 收集 oMLX warning → 固定 OCR cleaner → ConvertResult。" vertex="1">
           <mxGeometry height="50" width="600" x="520" y="1242" as="geometry" />
         </mxCell>
-        <mxCell id="p3_c_22_3" parent="1" style="fillColor=#FFFFFF;strokeColor=#E2E8F0;fontColor=#1E293B;fontSize=11;align=left;verticalAlign=middle;spacingLeft=8;;rounded=1;whiteSpace=wrap;html=1;" value="file_path: Path, source_file: SourceFile" vertex="1">
+        <mxCell id="p3_c_22_3" parent="1" style="fillColor=#FFFFFF;strokeColor=#E2E8F0;fontColor=#1E293B;fontSize=11;align=left;verticalAlign=middle;spacingLeft=8;;rounded=1;whiteSpace=wrap;html=1;" value="file_stream: BinaryIO, source_file: SourceFile" vertex="1">
           <mxGeometry height="50" width="520" x="1120" y="1242" as="geometry" />
         </mxCell>
         <mxCell id="p3_c_22_4" parent="1" style="fillColor=#FFFFFF;strokeColor=#E2E8F0;fontColor=#1E293B;fontSize=11;align=left;verticalAlign=middle;spacingLeft=8;;rounded=1;whiteSpace=wrap;html=1;" value="ConvertResult" vertex="1">
@@ -979,7 +979,7 @@
         <mxCell id="p3_c_24_2" parent="1" style="fillColor=#FFFFFF;strokeColor=#E2E8F0;fontColor=#1E293B;fontSize=11;align=left;verticalAlign=middle;spacingLeft=8;;rounded=1;whiteSpace=wrap;html=1;" value="plugin 根据文档内容决定是否调用 OCR；项目不自行判断文件类型。" vertex="1">
           <mxGeometry height="50" width="600" x="520" y="1342" as="geometry" />
         </mxCell>
-        <mxCell id="p3_c_24_3" parent="1" style="fillColor=#FFFFFF;strokeColor=#E2E8F0;fontColor=#1E293B;fontSize=11;align=left;verticalAlign=middle;spacingLeft=8;;rounded=1;whiteSpace=wrap;html=1;" value="source_file, file_path" vertex="1">
+        <mxCell id="p3_c_24_3" parent="1" style="fillColor=#FFFFFF;strokeColor=#E2E8F0;fontColor=#1E293B;fontSize=11;align=left;verticalAlign=middle;spacingLeft=8;;rounded=1;whiteSpace=wrap;html=1;" value="source_file, file_stream" vertex="1">
           <mxGeometry height="50" width="520" x="1120" y="1342" as="geometry" />
         </mxCell>
         <mxCell id="p3_c_24_4" parent="1" style="fillColor=#FFFFFF;strokeColor=#E2E8F0;fontColor=#1E293B;fontSize=11;align=left;verticalAlign=middle;spacingLeft=8;;rounded=1;whiteSpace=wrap;html=1;" value="bool" vertex="1">
@@ -1030,10 +1030,10 @@
         <mxCell id="p3_c_27_1" parent="1" style="fillColor=#F8FAFC;strokeColor=#E2E8F0;fontColor=#1E293B;fontSize=11;align=left;verticalAlign=middle;spacingLeft=8;;rounded=1;whiteSpace=wrap;html=1;" value="MarkItDownConverter.convert" vertex="1">
           <mxGeometry height="50" width="240" x="280" y="1492" as="geometry" />
         </mxCell>
-        <mxCell id="p3_c_27_2" parent="1" style="fillColor=#F8FAFC;strokeColor=#E2E8F0;fontColor=#1E293B;fontSize=11;align=left;verticalAlign=middle;spacingLeft=8;;rounded=1;whiteSpace=wrap;html=1;" value="调用 MarkItDown().convert(path) 并提取 result.markdown;任意异常 → ConversionError。" vertex="1">
+        <mxCell id="p3_c_27_2" parent="1" style="fillColor=#F8FAFC;strokeColor=#E2E8F0;fontColor=#1E293B;fontSize=11;align=left;verticalAlign=middle;spacingLeft=8;;rounded=1;whiteSpace=wrap;html=1;" value="调用 MarkItDown().convert_stream(file_stream, stream_info) 并提取 result.markdown;任意异常 → ConversionError。" vertex="1">
           <mxGeometry height="50" width="600" x="520" y="1492" as="geometry" />
         </mxCell>
-        <mxCell id="p3_c_27_3" parent="1" style="fillColor=#F8FAFC;strokeColor=#E2E8F0;fontColor=#1E293B;fontSize=11;align=left;verticalAlign=middle;spacingLeft=8;;rounded=1;whiteSpace=wrap;html=1;" value="file_path: Path" vertex="1">
+        <mxCell id="p3_c_27_3" parent="1" style="fillColor=#F8FAFC;strokeColor=#E2E8F0;fontColor=#1E293B;fontSize=11;align=left;verticalAlign=middle;spacingLeft=8;;rounded=1;whiteSpace=wrap;html=1;" value="file_stream: BinaryIO, filename: str, content_type: str | None" vertex="1">
           <mxGeometry height="50" width="520" x="1120" y="1492" as="geometry" />
         </mxCell>
         <mxCell id="p3_c_27_4" parent="1" style="fillColor=#F8FAFC;strokeColor=#E2E8F0;fontColor=#1E293B;fontSize=11;align=left;verticalAlign=middle;spacingLeft=8;;rounded=1;whiteSpace=wrap;html=1;" value="str (markdown)" vertex="1">
@@ -1186,40 +1186,40 @@
         <mxCell id="p3_c_35_5" parent="1" style="fillColor=#F8FAFC;strokeColor=#E2E8F0;fontColor=#1E293B;fontSize=11;align=left;verticalAlign=middle;spacingLeft=8;;rounded=1;whiteSpace=wrap;html=1;" value="—" vertex="1">
           <mxGeometry height="50" width="280" x="1920" y="1892" as="geometry" />
         </mxCell>
-        <mxCell id="p3_f_36" parent="1" style="fillColor=#FEF3C7;strokeColor=#D97706;fontColor=#D97706;fontSize=12;;rounded=1;whiteSpace=wrap;html=1;" value="&lt;b&gt;uploads/temp_uploads.py&lt;/b&gt;" vertex="1">
+        <mxCell id="p3_f_36" parent="1" style="fillColor=#FEF3C7;strokeColor=#D97706;fontColor=#D97706;fontSize=12;;rounded=1;whiteSpace=wrap;html=1;" value="&lt;b&gt;api/convert.py&lt;/b&gt;" vertex="1">
           <mxGeometry height="50" width="230" x="50" y="1942" as="geometry" />
         </mxCell>
-        <mxCell id="p3_c_36_1" parent="1" style="fillColor=#FFFFFF;strokeColor=#E2E8F0;fontColor=#1E293B;fontSize=11;align=left;verticalAlign=middle;spacingLeft=8;;rounded=1;whiteSpace=wrap;html=1;" value="TempUploadedFile.cleanup" vertex="1">
+        <mxCell id="p3_c_36_1" parent="1" style="fillColor=#FFFFFF;strokeColor=#E2E8F0;fontColor=#1E293B;fontSize=11;align=left;verticalAlign=middle;spacingLeft=8;;rounded=1;whiteSpace=wrap;html=1;" value="_source_filename" vertex="1">
           <mxGeometry height="50" width="240" x="280" y="1942" as="geometry" />
         </mxCell>
-        <mxCell id="p3_c_36_2" parent="1" style="fillColor=#FFFFFF;strokeColor=#E2E8F0;fontColor=#1E293B;fontSize=11;align=left;verticalAlign=middle;spacingLeft=8;;rounded=1;whiteSpace=wrap;html=1;" value="请求结束时删除临时文件;Path.unlink(missing_ok=True) 已自动吞掉 FileNotFoundError。" vertex="1">
+        <mxCell id="p3_c_36_2" parent="1" style="fillColor=#FFFFFF;strokeColor=#E2E8F0;fontColor=#1E293B;fontSize=11;align=left;verticalAlign=middle;spacingLeft=8;;rounded=1;whiteSpace=wrap;html=1;" value="去除客户端传入的目录分量，只保留安全文件名；服务不据此创建文件。" vertex="1">
           <mxGeometry height="50" width="600" x="520" y="1942" as="geometry" />
         </mxCell>
-        <mxCell id="p3_c_36_3" parent="1" style="fillColor=#FFFFFF;strokeColor=#E2E8F0;fontColor=#1E293B;fontSize=11;align=left;verticalAlign=middle;spacingLeft=8;;rounded=1;whiteSpace=wrap;html=1;" value="—" vertex="1">
+        <mxCell id="p3_c_36_3" parent="1" style="fillColor=#FFFFFF;strokeColor=#E2E8F0;fontColor=#1E293B;fontSize=11;align=left;verticalAlign=middle;spacingLeft=8;;rounded=1;whiteSpace=wrap;html=1;" value="filename: str | None" vertex="1">
           <mxGeometry height="50" width="520" x="1120" y="1942" as="geometry" />
         </mxCell>
-        <mxCell id="p3_c_36_4" parent="1" style="fillColor=#FFFFFF;strokeColor=#E2E8F0;fontColor=#1E293B;fontSize=11;align=left;verticalAlign=middle;spacingLeft=8;;rounded=1;whiteSpace=wrap;html=1;" value="None" vertex="1">
+        <mxCell id="p3_c_36_4" parent="1" style="fillColor=#FFFFFF;strokeColor=#E2E8F0;fontColor=#1E293B;fontSize=11;align=left;verticalAlign=middle;spacingLeft=8;;rounded=1;whiteSpace=wrap;html=1;" value="str" vertex="1">
           <mxGeometry height="50" width="280" x="1640" y="1942" as="geometry" />
         </mxCell>
         <mxCell id="p3_c_36_5" parent="1" style="fillColor=#FFFFFF;strokeColor=#E2E8F0;fontColor=#1E293B;fontSize=11;align=left;verticalAlign=middle;spacingLeft=8;;rounded=1;whiteSpace=wrap;html=1;" value="—" vertex="1">
           <mxGeometry height="50" width="280" x="1920" y="1942" as="geometry" />
         </mxCell>
-        <mxCell id="p3_f_37" parent="1" style="fillColor=#FEF3C7;strokeColor=#D97706;fontColor=#D97706;fontSize=12;;rounded=1;whiteSpace=wrap;html=1;" value="&lt;b&gt;uploads/temp_uploads.py&lt;/b&gt;" vertex="1">
+        <mxCell id="p3_f_37" parent="1" style="fillColor=#FEF3C7;strokeColor=#D97706;fontColor=#D97706;fontSize=12;;rounded=1;whiteSpace=wrap;html=1;" value="&lt;b&gt;api/convert.py&lt;/b&gt;" vertex="1">
           <mxGeometry height="50" width="230" x="50" y="1992" as="geometry" />
         </mxCell>
-        <mxCell id="p3_c_37_1" parent="1" style="fillColor=#F8FAFC;strokeColor=#E2E8F0;fontColor=#1E293B;fontSize=11;align=left;verticalAlign=middle;spacingLeft=8;;rounded=1;whiteSpace=wrap;html=1;" value="save_upload_file" vertex="1">
+        <mxCell id="p3_c_37_1" parent="1" style="fillColor=#F8FAFC;strokeColor=#E2E8F0;fontColor=#1E293B;fontSize=11;align=left;verticalAlign=middle;spacingLeft=8;;rounded=1;whiteSpace=wrap;html=1;" value="_validate_upload_size" vertex="1">
           <mxGeometry height="50" width="240" x="280" y="1992" as="geometry" />
         </mxCell>
-        <mxCell id="p3_c_37_2" parent="1" style="fillColor=#F8FAFC;strokeColor=#E2E8F0;fontColor=#1E293B;fontSize=11;align=left;verticalAlign=middle;spacingLeft=8;;rounded=1;whiteSpace=wrap;html=1;" value="分块 await UploadFile.read(1 MiB) 写入 NamedTemporaryFile;累计 &gt; max_bytes 时删除文件并抛 UploadTooLargeError。" vertex="1">
+        <mxCell id="p3_c_37_2" parent="1" style="fillColor=#F8FAFC;strokeColor=#E2E8F0;fontColor=#1E293B;fontSize=11;align=left;verticalAlign=middle;spacingLeft=8;;rounded=1;whiteSpace=wrap;html=1;" value="根据 multipart 已解析出的 UploadFile.size 校验 MAX_UPLOAD_MB；不复制、不持久化上传内容。" vertex="1">
           <mxGeometry height="50" width="600" x="520" y="1992" as="geometry" />
         </mxCell>
-        <mxCell id="p3_c_37_3" parent="1" style="fillColor=#F8FAFC;strokeColor=#E2E8F0;fontColor=#1E293B;fontSize=11;align=left;verticalAlign=middle;spacingLeft=8;;rounded=1;whiteSpace=wrap;html=1;" value="upload_file: UploadFile, settings: Settings" vertex="1">
+        <mxCell id="p3_c_37_3" parent="1" style="fillColor=#F8FAFC;strokeColor=#E2E8F0;fontColor=#1E293B;fontSize=11;align=left;verticalAlign=middle;spacingLeft=8;;rounded=1;whiteSpace=wrap;html=1;" value="upload_file: UploadFile" vertex="1">
           <mxGeometry height="50" width="520" x="1120" y="1992" as="geometry" />
         </mxCell>
-        <mxCell id="p3_c_37_4" parent="1" style="fillColor=#F8FAFC;strokeColor=#E2E8F0;fontColor=#1E293B;fontSize=11;align=left;verticalAlign=middle;spacingLeft=8;;rounded=1;whiteSpace=wrap;html=1;" value="TempUploadedFile(path, size_bytes)" vertex="1">
+        <mxCell id="p3_c_37_4" parent="1" style="fillColor=#F8FAFC;strokeColor=#E2E8F0;fontColor=#1E293B;fontSize=11;align=left;verticalAlign=middle;spacingLeft=8;;rounded=1;whiteSpace=wrap;html=1;" value="None" vertex="1">
           <mxGeometry height="50" width="280" x="1640" y="1992" as="geometry" />
         </mxCell>
-        <mxCell id="p3_c_37_5" parent="1" style="fillColor=#F8FAFC;strokeColor=#E2E8F0;fontColor=#1E293B;fontSize=11;align=left;verticalAlign=middle;spacingLeft=8;;rounded=1;whiteSpace=wrap;html=1;" value="UploadTooLargeError(413) / OSError" vertex="1">
+        <mxCell id="p3_c_37_5" parent="1" style="fillColor=#F8FAFC;strokeColor=#E2E8F0;fontColor=#1E293B;fontSize=11;align=left;verticalAlign=middle;spacingLeft=8;;rounded=1;whiteSpace=wrap;html=1;" value="UploadTooLargeError(413)" vertex="1">
           <mxGeometry height="50" width="280" x="1920" y="1992" as="geometry" />
         </mxCell>
         <mxCell id="p3_f_38" parent="1" style="fillColor=#E2E8F0;strokeColor=#334155;fontColor=#334155;fontSize=12;;rounded=1;whiteSpace=wrap;html=1;" value="&lt;b&gt;run_server.py&lt;/b&gt;" vertex="1">

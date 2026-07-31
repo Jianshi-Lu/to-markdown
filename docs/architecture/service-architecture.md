@@ -31,32 +31,20 @@ Normalizer 只删除 OCR 模型输出中的协议标记和坐标，保留识别�
 POST /convert
   -> api.convert 接收 UploadFile
   -> api.dependencies 通过 Depends 获取共享 ConvertService
-  -> uploads.temp_uploads 保存为临时文件
-  -> convert.service 编排转换
-  -> integrations.markitdown 调用 MarkItDown
+  -> convert.service 直接接收请求级文件流
+  -> integrations.markitdown 调用 MarkItDown.convert_stream
   -> integrations.omlx 作为 MarkItDown 的 llm_client
   -> convert.ocr_markdown_cleaner 清理 OCR 协议噪声
-  -> api.models.convert.ConvertResponse 返回 Markdown
+  -> Response 返回单个 text/markdown 文件
 ```
 
 接口在 HTTP 语义上是同步的：一次请求等待一次转换完成。`ConvertService.convert(...)` 是同步函数，但路由通过 `run_in_threadpool()` 执行，因此不会直接阻塞 FastAPI 主事件循环。内部核心入口不依赖 FastAPI request，未来仍可被异步任务 worker 复用。
 
 `ConvertService` 在 FastAPI 应用启动时创建一次，并在应用关闭时释放 oMLX/OpenAI SDK 的 HTTP 资源。路由通过 `Depends(get_convert_service)` 获取该实例，而不是自行创建或直接装配服务。每次转换只创建请求级的 OCR 调用状态，避免并发请求共享 warning。
 
-### `POST /convert/object`
-
-请求体为单个 MinIO 原始对象 Key：
-
-```json
-{"originalObjectKey":"bid-records/8/batches/550e8400-e29b-41d4-a716-446655440000/original/a.pdf"}
-```
-
-服务通过应用生命周期内复用的 MinIO 读取器读取一个
-`bid-records/{bidRecordId}/batches/{uploadBatchId}/original/a.pdf` 对象，下载到 `TEMP_DIR` 下的临时文件，再复用
-`ConvertService.convert()` 调用 MarkItDown，转换完成后删除临时文件，并立即写入
-`bid-records/{bidRecordId}/batches/{uploadBatchId}/converted/a.md`。MinIO 以对象前缀表示目录，首次上传时无需额外创建目录。
-Java 负责批次循环、文件状态和批次状态，Python 只处理当前对象。响应仅返回原对象 Key、转换
-对象 Key 和 warning，不返回全部 Markdown 内容。
+服务不提供 `/convert/object`。MinIO、文件系统或其他存储中的原文件由调用方
+读取；调用方通过 multipart 上传文件，并负责持久化返回的 Markdown。Python
+不知道 `bidRecordId`、`batchId`、object key、`original/` 或 `converted/`。
 
 ## API
 
@@ -77,13 +65,12 @@ Java 负责批次循环、文件状态和批次状态，Python 只处理当前�
 - `file`：上传文件，必填。
 MarkItDown plugin 在服务端固定启用；文件中没有可 OCR 图片时不会访问 oMLX。
 
-响应字段：
+成功响应：
 
-- `markdown`：转换后的 Markdown。
-- `source_filename`：原始文件名。
-- `content_type`：上传文件 Content-Type。
-- `normalized`：本次输出是否清理了 OCR 协议标记。
-- `warnings`：非致命提示。
+- HTTP 状态为 `200`。
+- `Content-Type` 为 `text/markdown; charset=utf-8`。
+- `Content-Disposition` 提供由原文件名生成的 `.md` 下载名。
+- 响应体就是 Markdown 内容，不再使用 JSON 包装。
 
 ## 配置项
 
@@ -96,17 +83,7 @@ MarkItDown plugin 在服务端固定启用；文件中没有可 OCR 图片时不
 - `OMLX_OCR_MAX_TOKENS`：OCR 最大输出 token，默认 `4096`。
 - `OMLX_OCR_TEMPERATURE`：OCR 采样温度，默认 `0`。
 - `OMLX_OCR_REPETITION_PENALTY`：OCR 重复惩罚，默认 `1.1`。
-- `TEMP_DIR`：临时文件目录，默认项目根目录下的 `.runtime/uploads/`。
 - `MAX_UPLOAD_MB`：上传文件大小限制，默认 `100`。
-- `MINIO_ENDPOINT`：MinIO 服务地址，默认 `http://10.0.0.100:9000`。
-- `MINIO_ACCESS_KEY` / `MINIO_SECRET_KEY`：MinIO 访问凭据。
-- `MINIO_BUCKET`：资信文件 Bucket，默认 `credential-files`。
-
-批次转换需要在当前虚拟环境安装 MinIO Python SDK：
-
-```bash
-.venv/bin/python -m pip install minio
-```
 
 ## 错误处理
 
@@ -126,15 +103,13 @@ MarkItDown plugin 在服务端固定启用；文件中没有可 OCR 图片时不
 - Redis / Celery / 任务队列。
 - 用户系统。
 - 原始文件上传和业务文件元数据管理（由 Java 负责）。
+- 原始文件读取、Markdown 保存和存储路径生成。
 - 业务批次/文件状态维护（由 Java 负责）。
 - 文本 LLM 二次重写。
 - 页面端 UI。
 
-当前 `/convert/object` 已通过 `integrations/minio.py` 从共享 MinIO 读取一个
-`original` 对象，并将转换后的 Markdown 写入同批次的 `converted` 前缀。Python
-不维护业务数据库，也不负责批次循环；Java 负责逐文件调用、状态更新和后续汇总。
-
-这些能力后续都可以在当前分层上扩展，不需要改写 MarkItDown/oMLX 的核心适配逻辑。
+历史 MinIO 适配器保存在 `archive/integrations/minio.py`，不属于正式服务依赖。
+若调用方使用 MinIO，应在调用方完成下载和返回 Markdown 的上传。
 
 独立的模型退化排错材料位于
 [`experiments/omlx_ocr_degeneration/`](../../experiments/omlx_ocr_degeneration/)，不属于正式服务运行时路径。

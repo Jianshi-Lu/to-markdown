@@ -17,17 +17,3 @@ class ConvertResult:
     content_type: str | None
     normalized: bool
     warnings: list[str] = field(default_factory=list)
-
-
-@dataclass(frozen=True)
-class ObjectConvertResult:
-    """一个 MinIO 原始对象对应的转换结果。"""
-
-    original_object_key: str
-    original_filename: str
-    converted_object_key: str | None
-    content_type: str | None
-    status: str
-    warnings: list[str] = field(default_factory=list)
-    error: str | None = None
-

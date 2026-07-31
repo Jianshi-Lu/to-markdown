@@ -1,17 +1,16 @@
 """文件转换业务服务。"""
 
-from pathlib import Path
+from typing import BinaryIO
 
 from integrations.markitdown import MarkItDownConverter
-from integrations.minio import MinioObjectStorage
 from integrations.omlx import OmlxOcrClient
 from core.config import Settings
 from convert.ocr_markdown_cleaner import OcrMarkdownCleaner
-from convert.types import ConvertResult, ObjectConvertResult, SourceFile
+from convert.types import ConvertResult, SourceFile
 
 
 class ConvertService:
-    """复用转换运行时并编排本地文件到 Markdown 的同步转换。"""
+    """复用转换运行时并编排输入文件流到 Markdown 的同步转换。"""
 
     def __init__(
         self,
@@ -40,17 +39,21 @@ class ConvertService:
 
     def convert(
         self,
-        file_path: Path,
+        file_stream: BinaryIO,
         source_file: SourceFile,
     ) -> ConvertResult:
-        """执行一次转换，并隔离本次请求的 OCR 调用状态。"""
+        """把调用方提供的文件流转换为 Markdown，并隔离 OCR 调用状态。"""
 
         warnings: list[str] = []
 
         # 客户端共享连接，状态通过 ContextVar 按请求隔离，避免并发 warning 串线。
         request_token = self._omlx_ocr_client.begin_request()
         try:
-            markdown = self._markitdown_converter.convert(file_path)
+            markdown = self._markitdown_converter.convert(
+                file_stream,
+                filename=source_file.filename,
+                content_type=source_file.content_type,
+            )
         finally:
             ocr_call_state = self._omlx_ocr_client.end_request(request_token)
         warnings.extend(ocr_call_state.errors)
@@ -65,45 +68,6 @@ class ConvertService:
             normalized=normalized,
             warnings=warnings,
         )
-
-    def convert_object(
-        self,
-        original_object_key: str,
-        object_storage: MinioObjectStorage,
-    ) -> ObjectConvertResult:
-        """从 MinIO 读取一个 original 对象并写入对应的 converted 对象。"""
-
-        original = object_storage.get_original_object(original_object_key)
-        self._settings.temp_dir.mkdir(parents=True, exist_ok=True)
-        suffix = Path(original.filename).suffix
-        temp_path = self._settings.temp_dir / (
-            f"{Path(original.object_key).name}_{id(original)}{suffix}"
-        )
-        try:
-            converted_object_key = object_storage.converted_object_key(
-                original.object_key
-            )
-            object_storage.download(original.object_key, temp_path)
-            result = self.convert(
-                temp_path,
-                SourceFile(
-                    filename=original.filename,
-                    content_type=original.content_type,
-                    size_bytes=original.size_bytes,
-                ),
-            )
-            # MinIO 以对象前缀表示目录；首次上传时 converted 前缀会自动形成。
-            object_storage.upload_markdown(converted_object_key, result.markdown)
-            return ObjectConvertResult(
-                original_object_key=original.object_key,
-                original_filename=original.filename,
-                converted_object_key=converted_object_key,
-                content_type=result.content_type,
-                status="COMPLETED",
-                warnings=result.warnings,
-            )
-        finally:
-            temp_path.unlink(missing_ok=True)
 
     def _build_conversion_runtime(
         self,

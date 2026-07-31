@@ -52,19 +52,9 @@ def convert_file(input_path: Path) -> Path:
             f"{response.text}"
         )
 
-    try:
-        markdown = response.json()["markdown"]
-    except (KeyError, ValueError) as exc:
-        raise RuntimeError(
-            f"Conversion response for {input_path} does not contain markdown."
-        ) from exc
-
-    if not isinstance(markdown, str):
-        raise RuntimeError(f"Conversion response for {input_path} has invalid markdown.")
-
     output_path = output_path_for(input_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_text(markdown, encoding="utf-8")
+    output_path.write_bytes(response.content)
     return output_path
 
 

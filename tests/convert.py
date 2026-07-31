@@ -60,7 +60,7 @@ def main() -> None:
         sys.argv[2] if len(sys.argv) == 3 else None,
     )
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_text(response.json()["markdown"], encoding="utf-8")
+    output_path.write_bytes(response.content)
     print(f"Markdown written to: {output_path}")
 
 

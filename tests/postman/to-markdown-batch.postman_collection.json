@@ -1,17 +1,13 @@
 {
   "info": {
     "name": "to-markdown 单文件转换联调",
-    "description": "验证 Python 从 MinIO 读取一个 original 对象并写入对应 converted 对象。",
+    "description": "验证纯文件转换服务接收 multipart 文件并返回 Markdown 文件。",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
     {
       "key": "baseUrl",
       "value": "http://127.0.0.1:8081"
-    },
-    {
-      "key": "originalObjectKey",
-      "value": "bid-records/8/batches/550e8400-e29b-41d4-a716-446655440000/original/a.pdf"
     }
   ],
   "item": [
@@ -66,28 +62,24 @@
       ]
     },
     {
-      "name": "单文件转换并写回 MinIO",
+      "name": "单文件转换",
       "request": {
         "method": "POST",
-        "header": [
-          {
-            "key": "Content-Type",
-            "value": "application/json"
-          }
-        ],
+        "header": [],
         "body": {
-          "mode": "raw",
-          "raw": "{\n  \"originalObjectKey\": \"{{originalObjectKey}}\"\n}",
-          "options": {
-            "raw": {
-              "language": "json"
+          "mode": "formdata",
+          "formdata": [
+            {
+              "key": "file",
+              "type": "file",
+              "src": "tests/test_files/input/test_pdf.pdf"
             }
-          }
+          ]
         },
         "url": {
-          "raw": "{{baseUrl}}/convert/object",
+          "raw": "{{baseUrl}}/convert",
           "host": ["{{baseUrl}}"],
-          "path": ["convert", "object"]
+          "path": ["convert"]
         }
       },
       "event": [
@@ -99,19 +91,10 @@
               "pm.test('HTTP 200', function () {",
               "    pm.response.to.have.status(200);",
               "});",
-              "",
-              "const result = pm.response.json();",
-              "const requestBody = JSON.parse(pm.variables.replaceIn(pm.request.body.raw));",
-              "pm.test('返回原对象 Key 一致', function () {",
-              "    pm.expect(result.originalObjectKey).to.eql(requestBody.originalObjectKey);",
-              "});",
-              "pm.test('文件转换完成', function () {",
-              "    pm.expect(result.status).to.eql('COMPLETED');",
-              "    pm.expect(result.convertedObjectKey).to.include('/converted/');",
-              "    pm.expect(result.convertedObjectKey).to.match(/\\.md$/);",
-              "});",
-              "pm.test('响应包含转换结果', function () {",
-              "    pm.expect(result.originalFilename).to.be.a('string');",
+              "pm.test('返回 Markdown 文件', function () {",
+              "    pm.expect(pm.response.headers.get('Content-Type')).to.include('text/markdown');",
+              "    pm.expect(pm.response.headers.get('Content-Disposition')).to.include('.md');",
+              "    pm.expect(pm.response.text()).to.be.a('string');",
               "});"
             ]
           }

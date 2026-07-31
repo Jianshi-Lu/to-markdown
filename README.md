@@ -27,7 +27,8 @@ curl http://127.0.0.1:8081/health/omlx
 
 ## `POST /convert`
 
-上传文件并返回 Markdown。文件格式由 MarkItDown 识别；服务端固定启用 plugin，图片内容由 plugin 按需进行 OCR。
+上传一个文件并直接返回对应的 Markdown 文件。文件格式由 MarkItDown 识别；
+服务端固定启用 plugin，图片内容由 plugin 按需进行 OCR。
 
 请求使用 `multipart/form-data`，必填字段只有 `file`。
 
@@ -36,42 +37,16 @@ curl -X POST http://127.0.0.1:8081/convert \
   -F "file=@./samples/contract.pdf"
 ```
 
-响应中的 `markdown` 字段为转换结果；`warnings` 字段用于返回非致命提示。
+成功响应不是 JSON，而是单个 Markdown 文件：
 
-## `POST /convert/object`
+```http
+HTTP/1.1 200 OK
+Content-Type: text/markdown; charset=utf-8
+Content-Disposition: attachment; filename="converted.md"; filename*=UTF-8''contract.md
 
-Java 负责批次循环和数据库状态更新；Python 每次只接收一个 MinIO `original` object key，
-读取单个对象、转换 Markdown，并写入对应的 `converted` object key：
-
-```bash
-curl -X POST http://127.0.0.1:8081/convert/object \
-  -H 'Content-Type: application/json' \
-  -d '{"originalObjectKey":"bid-records/8/batches/550e8400-e29b-41d4-a716-446655440000/original/a.pdf"}'
+# 转换后的 Markdown
 ```
 
-输入对象：
-
-```text
-bid-records/<bidRecordId>/batches/<uploadBatchId>/original/a.pdf
-```
-
-输出对象：
-
-```text
-bid-records/<bidRecordId>/batches/<uploadBatchId>/converted/a.md
-```
-
-`converted` 前缀不存在时，首次上传 Markdown 对象会自动形成。Python 不读取批次列表，也不
-访问业务数据库；批次循环、单文件状态和批次状态由 Java 负责。
-
-成功响应示例：
-
-```json
-{
-  "originalObjectKey": ".../original/a.pdf",
-  "originalFilename": "a.pdf",
-  "convertedObjectKey": ".../converted/a.md",
-  "status": "COMPLETED",
-  "warnings": []
-}
-```
+服务不接收 MinIO object key，不读取或写入对象存储，也不生成 `original/`、
+`converted/`、`batchId` 等业务路径。调用方负责取得原文件、调用本接口、保存
+返回的 Markdown 文件并维护业务状态。

@@ -1,5 +1,5 @@
 import unittest
-from pathlib import Path
+from io import BytesIO
 from types import SimpleNamespace
 from unittest.mock import Mock
 
@@ -118,7 +118,6 @@ class OcrMarkdownCleanerTest(unittest.TestCase):
                 omlx_ocr_max_tokens=4096,
                 omlx_ocr_temperature=0,
                 omlx_ocr_repetition_penalty=1.1,
-                temp_dir=Path(".runtime/uploads"),
                 max_upload_mb=100,
             ),
             ocr_cleaner=cleaner,
@@ -127,7 +126,7 @@ class OcrMarkdownCleanerTest(unittest.TestCase):
         )
 
         result = service.convert(
-            Path("document.docx"),
+            BytesIO(b"document"),
             SourceFile(
                 filename="document.docx",
                 content_type=None,
@@ -135,6 +134,10 @@ class OcrMarkdownCleanerTest(unittest.TestCase):
             ),
         )
 
+        markitdown_converter.convert.assert_called_once()
+        _, call_kwargs = markitdown_converter.convert.call_args
+        self.assertEqual(call_kwargs["filename"], "document.docx")
+        self.assertIsNone(call_kwargs["content_type"])
         cleaner.clean.assert_called_once_with("raw markdown")
         self.assertEqual(result.markdown, "cleaned")
         self.assertTrue(result.normalized)

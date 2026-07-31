@@ -19,7 +19,6 @@ api/
   health.py
   dependencies.py
   models/
-    convert.py
     health.py
 core/
   config.py
@@ -31,10 +30,10 @@ convert/
   ocr_markdown_cleaner.py
 integrations/
   markitdown.py
-  minio.py
   omlx.py
-uploads/
-  temp_uploads.py
+archive/
+  integrations/
+    minio.py
 ```
 
 根目录就是服务代码根，不再额外套一层 `to_markdown/` 包。`main.py` 是唯一服务入口，直接创建 FastAPI app。
@@ -55,10 +54,9 @@ uploads/
 
 HTTP API 层。
 
-- `convert.py`：实现 `POST /convert` 和 `POST /convert/object`。
+- `convert.py`：接收 multipart 文件流，调用转换服务并返回 `text/markdown` 文件。
 - `health.py`：实现健康检查。
 - `dependencies.py`：通过 FastAPI `Depends` 提供应用级共享服务。
-- `models/convert.py`：定义文件转换响应模型。
 - `models/health.py`：定义健康检查响应模型。
 
 这一层不直接 import `MarkItDown`、`OpenAI` 或 `httpx`。
@@ -87,7 +85,7 @@ HTTP API 层。
 
 - `markitdown.py`：
   - 初始化 MarkItDown。
-  - 调用 `convert(...)`。
+  - 调用 `convert_stream(...)`，根据上传文件名和 MIME type 提供格式提示。
   - 把异常转换成项目自己的 `ConversionError`。
 
 - `omlx.py`：
@@ -96,25 +94,18 @@ HTTP API 层。
   - 修复部分 OCR 模型返回的 byte-level tokenizer 乱码。
   - 提供 oMLX 可达性检查。
 
-- `minio.py`：
-  - 读取一个 `original/` 对象。
-  - 下载原文件并上传对应的 `converted/` Markdown 对象。
-  - 将 MinIO 对象前缀映射为同批次的输出路径。
-
 项目其他层不直接依赖 OpenAI SDK 和 MarkItDown 细节。
 
-### `uploads`
+### `archive`
 
-上传文件的临时处理层。
+保存已经退出正式运行链路的历史实现。
 
-- `temp_uploads.py`：
-  - 保存 FastAPI 上传文件。
-  - 控制临时目录和大小限制。
-  - 转换结束后清理临时文件。
+- `archive/integrations/minio.py`：保留历史 MinIO 适配器，不由 `main`、`api`、
+  `convert` 或正式 `integrations` 导入。
 
-`/convert` 的上传文件仍只在请求期间保存到临时目录；`/convert/object` 的对象存储
-读写已经由 `integrations/minio.py` 实现。后续切换其他对象存储时，只需要扩展或替换
-这一层，不影响 MarkItDown/oMLX 转换核心。
+正式服务不包含文件存储层。FastAPI 将 multipart 文件暴露为 `UploadFile`，API
+把其请求级文件流直接交给 `ConvertService`；调用方负责原文件读取、Markdown
+持久化、目标路径、覆盖策略和业务状态。
 
 ## 同步与异步扩展
 
@@ -123,16 +114,17 @@ HTTP API 层。
 当前同步路径：
 
 ```text
-FastAPI route -> Depends(get_convert_service) -> ConvertService.convert(...) -> ConvertResponse
+FastAPI route -> Depends(get_convert_service) -> ConvertService.convert(stream) -> text/markdown
 ```
 
 未来异步路径可以变成：
 
 ```text
-FastAPI route -> 创建 task_id -> worker 调用 ConvertService.convert(...) -> 存储结果
+FastAPI route -> 创建 task_id -> worker 调用 ConvertService.convert(stream) -> 返回结果
 ```
 
-这样异步化时主要增加任务状态和结果存储，不需要重写转换核心。
+如果未来异步化，任务输入和结果持久化仍应由调用方或上层任务系统负责，不下沉
+到这个纯转换服务。
 
 ## 排错实验的定位
 

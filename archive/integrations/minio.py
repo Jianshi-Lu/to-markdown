@@ -1,4 +1,8 @@
-"""读写资信文件 MinIO 对象。"""
+"""历史 MinIO 对象存储适配器。
+
+当前正式服务只接收调用方上传的文件流并返回 Markdown，不再导入本模块。文件
+读取、目标路径生成和 Markdown 持久化均由调用方负责。
+"""
 
 from dataclasses import dataclass
 from io import BytesIO
@@ -40,6 +44,7 @@ class MinioObjectStorage:
             host = parsed.hostname
             if parsed.port:
                 host = f"{host}:{parsed.port}"
+            # 创建MinIO实例
             client = Minio(
                 host,
                 access_key=access_key,

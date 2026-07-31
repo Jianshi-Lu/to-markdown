@@ -10,6 +10,7 @@
 项目服务默认地址为 `http://127.0.0.1:8081`。如果使用其他地址，运行测试脚本前设置 `TO_MARKDOWN_BASE_URL`。
 
 服务固定启用 MarkItDown plugin；只有文件包含可 OCR 图片时才会访问 oMLX。
+接口成功响应是单个 `text/markdown` 文件，测试脚本负责将响应体保存到输出目录。
 
 ## 批量转换
 
@@ -49,8 +50,8 @@
 
 服务会固定清理 OCR 协议标记，无需额外传入开关。
 
-## Postman 批次联调
+## Postman 单文件联调
 
 可导入 [`postman/to-markdown-batch.postman_collection.json`](postman/to-markdown-batch.postman_collection.json)，
-将集合变量 `originalObjectKey` 改为 MinIO 中实际存在的原始对象 Key，然后调用单文件转换接口。
+在 Postman 中为 multipart 字段 `file` 选择一个本地测试文件，然后调用 `/convert`。
 详细前置条件见 [`postman/README.md`](postman/README.md)。
