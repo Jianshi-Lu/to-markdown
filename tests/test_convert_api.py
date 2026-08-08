@@ -22,7 +22,6 @@ class FakeConvertService:
             markdown="# 转换结果",
             source_filename=source_file.filename,
             content_type=source_file.content_type,
-            normalized=False,
             warnings=[],
         )
 
@@ -91,3 +90,27 @@ def test_object_storage_endpoint_is_not_exposed() -> None:
     )
 
     assert response.status_code == 404
+
+
+def test_convert_exposes_ocr_warning_headers() -> None:
+    """退化输出被丢弃后，调用方可以从响应头识别降级结果。"""
+
+    class WarningService(FakeConvertService):
+        def convert(self, file_stream, source_file):
+            file_stream.read()
+            return ConvertResult(
+                markdown="# 内置转换结果",
+                source_filename=source_file.filename,
+                content_type=source_file.content_type,
+                warnings=["OCR 输出疑似退化，已丢弃"],
+                warning_codes=["OCR_OUTPUT_DEGENERATED"],
+            )
+
+    response = create_test_client(WarningService()).post(
+        "/convert",
+        files={"file": ("a.pdf", b"input", "application/pdf")},
+    )
+
+    assert response.status_code == 200
+    assert response.headers["x-conversion-partial"] == "true"
+    assert response.headers["x-conversion-warnings"] == "OCR_OUTPUT_DEGENERATED"

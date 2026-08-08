@@ -1,1 +1,0 @@
-ZIP OCR conversion fixture. The archive contains an OCR target image and HTML fixture.

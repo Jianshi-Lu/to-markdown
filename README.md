@@ -27,8 +27,14 @@ curl http://127.0.0.1:8081/health/omlx
 
 ## `POST /convert`
 
-上传一个文件并直接返回对应的 Markdown 文件。文件格式由 MarkItDown 识别；
-服务端固定启用 plugin，图片内容由 plugin 按需进行 OCR。
+上传一个文件并直接返回对应的 Markdown 文件。文件格式由 MarkItDown 内置
+转换器识别（保留表格、列表等结构）；PDF 会逐页转换并带有 `## Page N` 分页，
+嵌入位图按需调用本地 unlimited-ocr，OCR 结果以 `*[Image OCR] ... [End OCR]*`
+插回 Markdown。DOCX/HTML/EPUB/ZIP 中的图片同样会被识别并把结果回填到对应
+图片标签位置。OCR 模型通过 `OMLX_MODEL` 配置，默认
+`unlimited-ocr-mxfp8-mlx`。文档解析和图片 OCR 使用独立输出上限：
+`OMLX_OCR_MAX_TOKENS` 默认 `16384`，`OMLX_IMAGE_OCR_MAX_TOKENS` 默认 `768`，
+避免复杂图片触发无界生成导致单文件转换长时间等待。
 
 请求使用 `multipart/form-data`，必填字段只有 `file`。
 

@@ -15,5 +15,5 @@ class ConvertResult:
     markdown: str
     source_filename: str
     content_type: str | None
-    normalized: bool
     warnings: list[str] = field(default_factory=list)
+    warning_codes: list[str] = field(default_factory=list)

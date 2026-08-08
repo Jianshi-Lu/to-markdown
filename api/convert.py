@@ -45,15 +45,21 @@ async def convert_file(
         ),
     )
     markdown_filename = f"{Path(source_filename).stem or 'converted'}.md"
+    response_headers = {
+        "Content-Disposition": (
+            "attachment; filename=\"converted.md\"; "
+            f"filename*=UTF-8''{quote(markdown_filename)}"
+        )
+    }
+    if result.warning_codes:
+        response_headers["X-Conversion-Partial"] = "true"
+        response_headers["X-Conversion-Warnings"] = ",".join(
+            result.warning_codes
+        )
     return Response(
         content=result.markdown,
         media_type="text/markdown",
-        headers={
-            "Content-Disposition": (
-                "attachment; filename=\"converted.md\"; "
-                f"filename*=UTF-8''{quote(markdown_filename)}"
-            )
-        },
+        headers=response_headers,
     )
 
 

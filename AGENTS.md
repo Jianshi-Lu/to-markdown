@@ -12,8 +12,9 @@
 当前服务负责：
 
 - 通过 MarkItDown 识别并转换 PDF、Office、图片、HTML、压缩包等测试覆盖的文件类型；
-- 通过 MarkItDown plugin 对文件中的图片按需调用本地 oMLX OCR/VLM 服务；
-- 清理 OCR 输出中的协议标记、坐标和已知模型伪影；
+- 始终启用 MarkItDown 内置转换器，保留表格、列表、标题等官方结构化能力；
+- 嵌入位图按需调用本地 unlimited-ocr（复用 markitdown-ocr 的 LLMVisionOCRService，
+  但不注册其插件，避免插件替换内置转换器）；
 - 通过 `POST /convert` 接收 multipart 文件并返回 `text/markdown`；
 - 暴露进程健康检查和 oMLX TCP 可达性检查。
 
@@ -43,7 +44,8 @@
 | Python | 服务实现语言；本地项目使用 Python 3.13 虚拟环境 |
 | FastAPI | HTTP 路由、multipart 上传和异常处理 |
 | Uvicorn | ASGI 服务运行器 |
-| MarkItDown | 文件类型识别和 Markdown 转换；固定开启 plugin |
+| MarkItDown | 文件类型识别和 Markdown 转换；只启用内置转换器 |
+| markitdown-ocr | 仅复用其 LLMVisionOCRService，不注册插件 |
 | OpenAI Python SDK + httpx | 以 OpenAI-compatible client 方式调用本地 oMLX |
 | oMLX | 独立 OCR/VLM 模型服务 |
 | unittest / pytest | 自动化测试 |
@@ -79,9 +81,9 @@ api/
 convert/
   service.py                    # 文件流转换主编排
   types.py                      # SourceFile、ConvertResult
-  ocr_markdown_cleaner.py       # OCR Markdown 协议噪声清理
 integrations/
   markitdown.py                 # MarkItDown 文件流适配
+  embedded_image_ocr.py         # 嵌入位图按需 OCR（PDF/Office）
   omlx.py                       # oMLX/OpenAI-compatible OCR 适配
 core/
   config.py                     # 进程级 Settings
@@ -152,10 +154,11 @@ POST /convert
   -> api.convert.convert_file
   -> 校验 UploadFile.size 和清理客户端路径信息
   -> run_in_threadpool(ConvertService.convert)
-  -> MarkItDownConverter.convert(file_stream, filename, content_type)
-  -> MarkItDown.convert_stream(StreamInfo)
-  -> MarkItDown plugin 按需调用 OmlxOcrClient
-  -> OcrMarkdownCleaner.clean
+  -> PDF：pypdfium2 拆单页 -> 每页 MarkItDown 内置转换
+        -> 页面含嵌入位图时 EmbeddedImageOcr 调用 unlimited-ocr
+  -> DOCX/PPTX/XLSX：MarkItDown 内置转换
+        -> ZIP 内 media 位图按需 OCR 并追加结果
+  -> 其它格式：MarkItDown 内置转换（图片文件走官方 ImageConverter）
   -> ConvertResult
   -> Response(text/markdown)
 ```
@@ -171,9 +174,34 @@ FastAPI 路由异步接收请求，同步转换在线程池执行。服务代码
 
 ### 6.1 MarkItDown
 
-`integrations/markitdown.py` 创建 `MarkItDown(enable_plugins=True, ...)`。
+`integrations/markitdown.py` 创建 `MarkItDown(enable_plugins=False, ...)`，
+不启用 markitdown-ocr 插件。原因：插件以 -1.0 优先级整体替换内置
+PDF/DOCX/PPTX/XLSX 转换器，导致 MarkItDown 自身的表格等结构能力被屏蔽。
 适配器根据上传文件名和 MIME type 构造 `StreamInfo`，直接调用
 `convert_stream()`。转换异常统一包装为 `ConversionError`。
+
+PDF 先扫描是否含嵌入位图：无位图时整篇单遍调用内置 PdfConverter（无分页标记，
+省去逐页拆解开销）；含位图时用 pypdfium2 拆成单页后逐页调用内置转换器，输出带
+`## Page N` 分页标记，让 OCR 结果稳定归属页面。
+
+### 6.3 嵌入位图按需 OCR
+
+`integrations/embedded_image_ocr.py` 复用 markitdown-ocr 的
+`LLMVisionOCRService`，配置为本地 unlimited-ocr（`OMLX_MODEL`）。只有检测到
+嵌入位图才发起请求：
+
+- PDF：pdfplumber 检测每页 `page.images`，渲染裁剪区域后 OCR，结果以
+  `*[Image OCR] ... [End OCR]*` 插回对应页面；
+- DOCX：按 `document.xml` 中图片出现顺序与 Markdown 图片标签配对，OCR 结果
+  紧跟对应 `![](...)` 标签插入；
+- HTML：提取 data URI 图片，OCR 结果紧跟对应图片标签插入；
+- EPUB：按 content.opf manifest 顺序提取图片，OCR 结果回填到相对路径标签；
+- ZIP：提取包内位图，OCR 结果回填到嵌套 HTML 等 Markdown 图片标签；
+- XLSX：解包 ZIP 中 `xl/media/` 下的位图，OCR 结果追加到 Markdown 末尾；
+- PPTX：由 MarkItDown 内置 PptxConverter 在配置 `llm_client` 时用
+  `llm_caption` 内联描述，不重复 OCR；
+- 远程 URL 图片（http/https）不发起 OCR，避免服务对外部站点产生依赖；
+- 纯文本/无位图文档：零 OCR 调用。
 
 ### 6.2 oMLX
 
@@ -181,20 +209,11 @@ FastAPI 路由异步接收请求，同步转换在线程池执行。服务代码
 - `max_retries=0`，没有 SDK 自动重试；
 - 每次转换通过 `ContextVar` 建立独立 `OmlxOcrCallState`；
 - 默认注入 `max_tokens`、`temperature`、`repetition_penalty`；
+- 文档解析继续使用 `OMLX_OCR_MAX_TOKENS`，含视觉输入的请求单独使用
+  `OMLX_IMAGE_OCR_MAX_TOKENS`（默认 768），避免复杂图片触发超长退化生成；
 - 对 byte-level tokenizer 文本做解码；
 - 丢弃连续重复字符的退化输出并记录 warning；
 - `finish_reason == "length"` 时保留文本并记录 warning。
-
-### 6.3 OCR Markdown 清理
-
-清理器只处理已知 OCR plugin 协议：
-
-- 删除 `[Image OCR] ... [End OCR]`；
-- 删除 `<|det|>... [坐标] <|/det|>` 标记和坐标；
-- `title` 转换为三级 Markdown 标题；
-- 保留 `text`、`image` 检测文字；
-- 删除已知单个模型前导伪影；
-- 不改写普通 Markdown。
 
 ## 7. 配置与敏感信息
 
@@ -205,10 +224,11 @@ FastAPI 路由异步接收请求，同步转换在线程池执行。服务代码
 | `OMLX_BASE_URL` | oMLX OpenAI-compatible 地址 |
 | `OMLX_API_KEY` | oMLX 请求凭据或本地占位 token |
 | `OMLX_MODEL` | OCR 模型名 |
-| `OMLX_OCR_PROMPT` | OCR prompt |
 | `OMLX_OCR_MAX_TOKENS` | OCR 输出上限 |
+| `OMLX_IMAGE_OCR_MAX_TOKENS` | 含图片输入的 OCR/视觉描述输出上限，默认 768 |
 | `OMLX_OCR_TEMPERATURE` | OCR 采样温度 |
 | `OMLX_OCR_REPETITION_PENALTY` | OCR 重复惩罚 |
+| `ON_DEMAND_OCR_ENABLED` | 是否启用嵌入位图按需 OCR（默认 1） |
 | `MAX_UPLOAD_MB` | multipart 文件大小上限 |
 | `SERVER_HOST` / `SERVER_PORT` / `SERVER_LOG_LEVEL` | Uvicorn 配置 |
 
@@ -242,7 +262,6 @@ traceback、凭据或内部网络认证信息。
 
 - `tests/test_convert_api.py`：multipart 输入、Markdown 文件响应、路径清理和旧端点移除；
 - `tests/test_markitdown_stream.py`：文件流与 `StreamInfo` 传递；
-- `tests/test_ocr_markdown_cleaner.py`：OCR 清理和 ConvertService 编排；
 - `tests/test_omlx.py`：请求参数、解码、退化输出和并发状态；
 - `tests/convert.py`、`tests/convert_all.py`：真实 HTTP 服务联调。
 
@@ -254,6 +273,8 @@ Postman 集合只调用 multipart `/convert`，不要求 MinIO。
 - `MAX_UPLOAD_MB` 在 multipart 解析完成后根据 `UploadFile.size` 校验，不是网关级限流；
 - oMLX 健康检查只有 TCP 级别；
 - 非致命 OCR warning 保留在内部 `ConvertResult`，成功的文件响应不携带 warning envelope；
+- 无文字矢量图形（流程图/图标）没有可 OCR 文本，unlimited-ocr 也无法给出语义描述；
+- OCR 文本质量取决于 unlimited-ocr 模型本身，服务只保证按需触发和结果回插；
 - 没有正式依赖锁定、容器编排、认证、限流和生产指标；
 - `archive/` 和 `experiments/` 不属于正式运行时。
 
@@ -264,5 +285,5 @@ Postman 集合只调用 multipart `/convert`，不要求 MinIO。
 3. 成功响应是单个 `text/markdown` 文件，不恢复 JSON Markdown envelope。
 4. 文件名只能用于格式提示和下载名，必须去掉调用方路径信息。
 5. 共享 oMLX/OpenAI client 可以复用，请求级 warning 状态必须隔离。
-6. OCR 清理器只清理已知协议噪声，不无依据改写普通 Markdown。
+6. OCR 只处理嵌入位图，不注册替换内置转换器的插件；无位图文档不得发起 OCR。
 7. 修改接口、配置、转换规则或生命周期时，同步更新 README、docs、测试和 Postman。

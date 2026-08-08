@@ -7,13 +7,13 @@
 ```text
 文件 / PDF / 图片
   -> FastAPI 上传接口
-  -> MarkItDown 文件类型路由和基础内容提取
-  -> oMLX VLM 补充图片 OCR
-  -> 清理 OCR 协议标记
+  -> MarkItDown 内置转换器（表格、列表等结构保留）
+  -> 嵌入位图按需调用 oMLX unlimited-ocr
   -> 输出 Markdown
 ```
 
-Normalizer 只删除 OCR 模型输出中的协议标记和坐标，保留识别文字与普通 Markdown，不调用文本 LLM 重写内容。
+服务不注册 markitdown-ocr 插件：插件会整体替换内置转换器，导致表格提取被
+屏蔽。OCR 只作用于检测到的嵌入位图，无位图文档零模型调用。
 
 ## 技术选型
 
@@ -32,9 +32,11 @@ POST /convert
   -> api.convert 接收 UploadFile
   -> api.dependencies 通过 Depends 获取共享 ConvertService
   -> convert.service 直接接收请求级文件流
-  -> integrations.markitdown 调用 MarkItDown.convert_stream
-  -> integrations.omlx 作为 MarkItDown 的 llm_client
-  -> convert.ocr_markdown_cleaner 清理 OCR 协议噪声
+  -> convert.service 按后缀编排
+     PDF：无位图整篇单遍转换；含位图时 pypdfium2 拆单页内置转换
+     -> 含嵌入位图时 integrations.embedded_image_ocr 调用 unlimited-ocr
+     DOCX/PPTX/XLSX：内置转换 -> media 位图按需 OCR
+     -> integrations.omlx 作为 OCR 的 OpenAI-compatible client
   -> Response 返回单个 text/markdown 文件
 ```
 
@@ -63,7 +65,8 @@ POST /convert
 字段：
 
 - `file`：上传文件，必填。
-MarkItDown plugin 在服务端固定启用；文件中没有可 OCR 图片时不会访问 oMLX。
+服务端只启用 MarkItDown 内置转换器；PDF 输出带 `## Page N` 分页。嵌入位图
+按需调用本地 unlimited-ocr，文件中没有嵌入位图时不会访问 oMLX。
 
 成功响应：
 
@@ -79,11 +82,15 @@ MarkItDown plugin 在服务端固定启用；文件中没有可 OCR 图片时不
 - `OMLX_BASE_URL`：默认 `http://127.0.0.1:8000/v1`。
 - `OMLX_API_KEY`：默认 `20020228`，作为本地 oMLX 占位 token。
 - `OMLX_MODEL`：默认 `unlimited-ocr-mxfp8-mlx`。
-- `OMLX_OCR_PROMPT`：默认 `Free OCR.`。
-- `OMLX_OCR_MAX_TOKENS`：OCR 最大输出 token，默认 `4096`。
+- OCR 文档解析提示词固定为 `document parsing.`，直接写入 `Settings`，不从环境变量覆盖。
+- `OMLX_OCR_MAX_TOKENS`：OCR 最大输出 token，默认 `16384`。
+- `OMLX_IMAGE_OCR_MAX_TOKENS`：含图片输入的 OCR/视觉描述最大输出 token，默认 `768`；
+  与文档解析输出上限分离，避免图片识别异常时长时间生成。
 - `OMLX_OCR_TEMPERATURE`：OCR 采样温度，默认 `0`。
 - `OMLX_OCR_REPETITION_PENALTY`：OCR 重复惩罚，默认 `1.1`。
 - `MAX_UPLOAD_MB`：上传文件大小限制，默认 `100`。
+- `ON_DEMAND_OCR_ENABLED`：嵌入位图按需 OCR 开关，默认 `1`。
+- 嵌入位图 OCR 提示词同样固定为 `document parsing.`，直接写入 `Settings`。
 
 ## 错误处理
 

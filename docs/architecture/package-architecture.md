@@ -27,9 +27,9 @@ core/
 convert/
   service.py
   types.py
-  ocr_markdown_cleaner.py
 integrations/
   markitdown.py
+  embedded_image_ocr.py
   omlx.py
 archive/
   integrations/
@@ -75,7 +75,6 @@ HTTP API 层。
 
 - `service.py`：`ConvertService`，负责完整转换流程。
 - `types.py`：源文件元信息和转换结果数据类型。
-- `ocr_markdown_cleaner.py`：清理 OCR 输出的边界标记、检测标签和坐标，不改写普通 Markdown。
 
 `ConvertService.convert(...)` 是未来同步和异步共用的核心入口。
 
@@ -84,9 +83,14 @@ HTTP API 层。
 第三方服务集成层。
 
 - `markitdown.py`：
-  - 初始化 MarkItDown。
+  - 初始化 MarkItDown（`enable_plugins=False`，只启用内置转换器）。
   - 调用 `convert_stream(...)`，根据上传文件名和 MIME type 提供格式提示。
   - 把异常转换成项目自己的 `ConversionError`。
+
+- `embedded_image_ocr.py`：
+  - 复用 markitdown-ocr 的 `LLMVisionOCRService`，OCR 模型为本地 unlimited-ocr。
+  - PDF 逐页检测嵌入位图并 OCR；DOCX/PPTX/XLSX 解包 `media/` 位图并 OCR。
+  - 不注册任何转换器，不阻塞 MarkItDown 内置能力。
 
 - `omlx.py`：
   - 用 OpenAI SDK 请求本地 oMLX。

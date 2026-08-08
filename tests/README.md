@@ -48,7 +48,8 @@
 
 实际输出为 `/path/to/result_converted.md`。
 
-服务会固定清理 OCR 协议标记，无需额外传入开关。
+服务按需调用本地 unlimited-ocr 识别嵌入位图，OCR 结果直接回填到 Markdown
+图片标签位置，无需额外传入开关。
 
 ## Postman 单文件联调
 

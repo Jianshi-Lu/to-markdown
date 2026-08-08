@@ -25,7 +25,7 @@ def is_test_file(path: Path) -> bool:
 
 def output_path_for(input_path: Path) -> Path:
     relative_path = input_path.relative_to(INPUT_DIR)
-    return OUTPUT_DIR / relative_path.with_name(f"{relative_path.stem}_converted.md")
+    return OUTPUT_DIR / relative_path.with_name(f"{relative_path.name}_converted.md")
 
 
 def clear_output_dir() -> None:

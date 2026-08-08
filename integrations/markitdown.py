@@ -10,7 +10,13 @@ from core.errors import ConversionError
 
 
 class MarkItDownConverter:
-    """封装 MarkItDown 的参数、结果和异常。"""
+    """封装 MarkItDown 的参数、结果和异常。
+
+    只启用内置转换器（enable_plugins=False）：markitdown-ocr 插件会以 -1.0
+    优先级替换内置 PDF/DOCX/PPTX/XLSX 转换器，导致 MarkItDown 自身的表格等
+    结构能力被屏蔽。嵌入图片的 OCR 由 ConvertService 按需调用
+    markitdown-ocr 的 LLMVisionOCRService，不再通过插件抢占入口。
+    """
 
     def __init__(
         self,
@@ -18,7 +24,7 @@ class MarkItDownConverter:
         llm_model: str | None = None,
         llm_prompt: str | None = None,
     ):
-        kwargs: dict[str, Any] = {"enable_plugins": True}
+        kwargs: dict[str, Any] = {"enable_plugins": False}
         if llm_client is not None:
             kwargs["llm_client"] = llm_client
         if llm_model is not None:
