@@ -28,8 +28,8 @@ curl http://127.0.0.1:8081/health/omlx
 ## `POST /convert`
 
 上传一个文件并直接返回对应的 Markdown 文件。文件格式由 MarkItDown 内置
-转换器识别（保留表格、列表等结构）；PDF 会逐页转换并带有 `## Page N` 分页，
-嵌入位图按需调用本地 unlimited-ocr，OCR 结果以 `*[Image OCR] ... [End OCR]*`
+转换器识别（保留表格、列表等结构）；无嵌入位图的 PDF 整篇单遍转换，只有检测到
+嵌入位图（或 PDF 无法解析）时才拆成单页并带有 `## Page N` 分页。嵌入位图按需调用本地 unlimited-ocr，OCR 结果以 `*[Image OCR] ... [End OCR]*`
 插回 Markdown。DOCX/HTML/EPUB/ZIP 中的图片同样会被识别并把结果回填到对应
 图片标签位置。OCR 模型通过 `OMLX_MODEL` 配置，默认
 `unlimited-ocr-mxfp8-mlx`。文档解析和图片 OCR 使用独立输出上限：

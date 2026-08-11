@@ -35,7 +35,7 @@ POST /convert
   -> convert.service 按后缀编排
      PDF：无位图整篇单遍转换；含位图时 pypdfium2 拆单页内置转换
      -> 含嵌入位图时 integrations.embedded_image_ocr 调用 unlimited-ocr
-     DOCX/PPTX/XLSX：内置转换 -> media 位图按需 OCR
+     DOCX/XLSX：内置转换 -> media 位图按需 OCR；PPTX 由内置转换器在配置 LLM client 时描述图片
      -> integrations.omlx 作为 OCR 的 OpenAI-compatible client
   -> Response 返回单个 text/markdown 文件
 ```
@@ -65,7 +65,7 @@ POST /convert
 字段：
 
 - `file`：上传文件，必填。
-服务端只启用 MarkItDown 内置转换器；PDF 输出带 `## Page N` 分页。嵌入位图
+服务端只启用 MarkItDown 内置转换器；无嵌入位图 PDF 整篇输出，含位图或无法解析时才带 `## Page N` 分页。嵌入位图
 按需调用本地 unlimited-ocr，文件中没有嵌入位图时不会访问 oMLX。
 
 成功响应：

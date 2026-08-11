@@ -9,7 +9,7 @@
 
 项目服务默认地址为 `http://127.0.0.1:8081`。如果使用其他地址，运行测试脚本前设置 `TO_MARKDOWN_BASE_URL`。
 
-服务固定启用 MarkItDown plugin；只有文件包含可 OCR 图片时才会访问 oMLX。
+服务固定禁用 MarkItDown plugin，仅使用内置转换器；只有文件包含可 OCR 图片时才会访问 oMLX。
 接口成功响应是单个 `text/markdown` 文件，测试脚本负责将响应体保存到输出目录。
 
 ## 批量转换

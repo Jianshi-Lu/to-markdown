@@ -82,7 +82,7 @@ flowchart TB
 | --- | --- | --- |
 | `file` | `UploadFile` | 文件名和 MIME 仅作为元信息，文件格式识别交给 MarkItDown。 |
 
-转换服务只启用 MarkItDown 内置转换器，PDF 逐页转换并带 `## Page N` 分页；
+转换服务只启用 MarkItDown 内置转换器；无嵌入位图的 PDF 整篇单遍转换，含位图或无法解析时才逐页转换并带 `## Page N` 分页；
 嵌入位图通过 markitdown-ocr 的 `LLMVisionOCRService` 按需访问本地
 unlimited-ocr。文件中没有嵌入位图时不会访问 oMLX。
 
@@ -153,8 +153,8 @@ sequenceDiagram
     R->>S: 在线程池调用 convert(file.file, source_file)
     S->>O: begin_request()
     S->>S: 读取文件字节并按类型编排
-    S->>M: 内置转换（PDF 逐页 / 其它整文件）
-    alt PDF 页面或 Office 含嵌入位图
+    S->>M: 内置转换（无位图 PDF/其它格式整文件；含位图 PDF 按页）
+    alt 含嵌入位图的 PDF 页面或 Office 文件
         S->>E: 渲染/解包位图
         E->>O: LLMVisionOCRService.chat.completions.create(...)
         O-->>E: 解码后的 OCR 文本

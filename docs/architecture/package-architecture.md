@@ -89,7 +89,7 @@ HTTP API 层。
 
 - `embedded_image_ocr.py`：
   - 复用 markitdown-ocr 的 `LLMVisionOCRService`，OCR 模型为本地 unlimited-ocr。
-  - PDF 逐页检测嵌入位图并 OCR；DOCX/PPTX/XLSX 解包 `media/` 位图并 OCR。
+  - 含嵌入位图的 PDF 才逐页检测并 OCR；DOCX/XLSX 解包 `media/` 位图并 OCR，PPTX 由内置转换器在配置 LLM client 时描述图片。
   - 不注册任何转换器，不阻塞 MarkItDown 内置能力。
 
 - `omlx.py`：

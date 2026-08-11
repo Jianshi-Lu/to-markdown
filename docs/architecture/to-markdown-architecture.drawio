@@ -76,7 +76,7 @@
         <mxCell id="services_layer" parent="process" style="swimlane;html=1;rounded=1;horizontal=1;startSize=30;fillColor=#DCFCE7;swimlaneFillColor=#BBF7D0;strokeColor=#16A34A;fontColor=#14532D;fontSize=13;" value="&lt;b&gt;convert/ · 文件转换功能(同步入口,可被 worker 复用)&lt;/b&gt;" vertex="1">
           <mxGeometry height="170" width="1120" x="30" y="820" as="geometry" />
         </mxCell>
-        <mxCell id="svc_conv" parent="services_layer" style="fillColor=#FFFFFF;strokeColor=#94A3B8;fontColor=#1E293B;fontSize=13;;rounded=1;whiteSpace=wrap;html=1;" value="&lt;b&gt;service.py&lt;/b&gt;&lt;br&gt;&lt;font style=&#39;font-size:11px&#39;&gt;ConvertService 在启动时复用转换器/OCR client；convert 编排按需 OCR → 收集 warning → 固定 OCR cleaner → ConvertResult&lt;/font&gt;" vertex="1">
+        <mxCell id="svc_conv" parent="services_layer" style="fillColor=#FFFFFF;strokeColor=#94A3B8;fontColor=#1E293B;fontSize=13;;rounded=1;whiteSpace=wrap;html=1;" value="&lt;b&gt;service.py&lt;/b&gt;&lt;br&gt;&lt;font style=&#39;font-size:11px&#39;&gt;ConvertService 在启动时复用转换器/OCR client；convert 按后缀编排、按需 OCR、收集 warning → ConvertResult&lt;/font&gt;" vertex="1">
           <mxGeometry height="100" width="520" x="20" y="50" as="geometry" />
         </mxCell>
         <mxCell id="svc_norm" parent="services_layer" style="fillColor=#FFFFFF;strokeColor=#94A3B8;fontColor=#1E293B;fontSize=13;;rounded=1;whiteSpace=wrap;html=1;" value="&lt;b&gt;embedded_image_ocr.py&lt;/b&gt;&lt;br&gt;&lt;font style=&#39;font-size:11px&#39;&gt;嵌入位图按需 OCR，结果回填到对应图片标签&lt;/font&gt;" vertex="1">
@@ -111,7 +111,7 @@
             </Array>
           </mxGeometry>
         </mxCell>
-        <mxCell id="e_svc_mark" edge="1" entryX="0" entryY="0.5" exitX="0.5" exitY="1" parent="process" source="svc_conv" style="endArrow=block;endFill=1;html=1;rounded=0;strokeColor=#EA580C;strokeWidth=2;fontSize=11;labelBackgroundColor=#F8FAFC;" target="ad_mark" value="_build_conversion_runtime (启动时)">
+        <mxCell id="e_svc_mark" edge="1" entryX="0" entryY="0.5" exitX="0.5" exitY="1" parent="process" source="svc_conv" style="endArrow=block;endFill=1;html=1;rounded=0;strokeColor=#EA580C;strokeWidth=2;fontSize=11;labelBackgroundColor=#F8FAFC;" target="ad_mark" value="ConvertService.__init__ (启动时)">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
         <mxCell id="e_svc_omlx" edge="1" entryX="0" entryY="0.5" exitX="1" exitY="0.5" parent="process" source="svc_conv" style="endArrow=block;endFill=1;html=1;rounded=0;strokeColor=#DC2626;strokeWidth=2;fontSize=11;labelBackgroundColor=#F8FAFC;" target="ad_omlx" value="OmlxOcrClient（发现图片时调用）">
@@ -344,7 +344,7 @@
         <mxCell id="self_702_5" parent="1" style="fillColor=#F8FAFC;strokeColor=#94A3B8;dashed=1;fontColor=#1E293B;fontSize=11;;rounded=1;whiteSpace=wrap;html=1;" value="复用应用级 OmlxOcrClient；仅在发现图片时发起 OCR 请求" vertex="1">
           <mxGeometry height="26" width="1122" x="1218" y="688" as="geometry" />
         </mxCell>
-        <mxCell id="step_742_5_7" edge="1" parent="1" style="endArrow=block;endFill=1;html=1;rounded=0;strokeColor=#2563EB;strokeWidth=2;fontSize=11;labelBackgroundColor=#FFFFFF;" value="plugin 发现图片 → chat.completions.create(...)；无图片则不联网">
+        <mxCell id="step_742_5_7" edge="1" parent="1" style="endArrow=block;endFill=1;html=1;rounded=0;strokeColor=#2563EB;strokeWidth=2;fontSize=11;labelBackgroundColor=#FFFFFF;" value="EmbeddedImageOcr 发现图片 → chat.completions.create(...)；无图片则不联网">
           <mxGeometry relative="1" as="geometry">
             <mxPoint x="1200" y="742" as="sourcePoint" />
             <mxPoint x="1616" y="742" as="targetPoint" />
@@ -368,7 +368,7 @@
             <mxPoint x="1200" y="842" as="targetPoint" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="self_870_5" parent="1" style="fillColor=#F8FAFC;strokeColor=#94A3B8;dashed=1;fontColor=#1E293B;fontSize=11;;rounded=1;whiteSpace=wrap;html=1;" value="_build_conversion_runtime() → MarkItDownConverter + OmlxOcrClient(启动时)" vertex="1">
+        <mxCell id="self_870_5" parent="1" style="fillColor=#F8FAFC;strokeColor=#94A3B8;dashed=1;fontColor=#1E293B;fontSize=11;;rounded=1;whiteSpace=wrap;html=1;" value="ConvertService.__init__ → MarkItDownConverter + OmlxOcrClient(启动时)" vertex="1">
           <mxGeometry height="26" width="1122" x="1218" y="856" as="geometry" />
         </mxCell>
         <mxCell id="step_908_5_7" edge="1" parent="1" style="endArrow=block;endFill=1;html=1;rounded=0;strokeColor=#2563EB;strokeWidth=2;fontSize=11;labelBackgroundColor=#FFFFFF;" value="构造 OmlxOcrClient(base_url, api_key)，此时不联网">
@@ -886,7 +886,7 @@
         <mxCell id="p3_c_19_1" parent="1" style="fillColor=#F8FAFC;strokeColor=#E2E8F0;fontColor=#1E293B;fontSize=11;align=left;verticalAlign=middle;spacingLeft=8;;rounded=1;whiteSpace=wrap;html=1;" value="文件格式处理" vertex="1">
           <mxGeometry height="50" width="240" x="280" y="1092" as="geometry" />
         </mxCell>
-        <mxCell id="p3_c_19_2" parent="1" style="fillColor=#F8FAFC;strokeColor=#E2E8F0;fontColor=#1E293B;fontSize=11;align=left;verticalAlign=middle;spacingLeft=8;;rounded=1;whiteSpace=wrap;html=1;" value="服务层不按 MIME 或后缀分支，格式识别交给 MarkItDown。" vertex="1">
+        <mxCell id="p3_c_19_2" parent="1" style="fillColor=#F8FAFC;strokeColor=#E2E8F0;fontColor=#1E293B;fontSize=11;align=left;verticalAlign=middle;spacingLeft=8;;rounded=1;whiteSpace=wrap;html=1;" value="服务按后缀选择 PDF/嵌入图片补充路径；基础格式识别交给 MarkItDown。" vertex="1">
           <mxGeometry height="50" width="600" x="520" y="1092" as="geometry" />
         </mxCell>
         <mxCell id="p3_c_19_3" parent="1" style="fillColor=#F8FAFC;strokeColor=#E2E8F0;fontColor=#1E293B;fontSize=11;align=left;verticalAlign=middle;spacingLeft=8;;rounded=1;whiteSpace=wrap;html=1;" value="set[str]" vertex="1">
@@ -940,7 +940,7 @@
         <mxCell id="p3_c_22_1" parent="1" style="fillColor=#FFFFFF;strokeColor=#E2E8F0;fontColor=#1E293B;fontSize=11;align=left;verticalAlign=middle;spacingLeft=8;;rounded=1;whiteSpace=wrap;html=1;" value="ConvertService.convert" vertex="1">
           <mxGeometry height="50" width="240" x="280" y="1242" as="geometry" />
         </mxCell>
-        <mxCell id="p3_c_22_2" parent="1" style="fillColor=#FFFFFF;strokeColor=#E2E8F0;fontColor=#1E293B;fontSize=11;align=left;verticalAlign=middle;spacingLeft=8;;rounded=1;whiteSpace=wrap;html=1;" value="编排完整转换:构建转换器/OCR client → MarkItDown 按需 OCR → 收集 oMLX warning → 固定 OCR cleaner → ConvertResult。" vertex="1">
+        <mxCell id="p3_c_22_2" parent="1" style="fillColor=#FFFFFF;strokeColor=#E2E8F0;fontColor=#1E293B;fontSize=11;align=left;verticalAlign=middle;spacingLeft=8;;rounded=1;whiteSpace=wrap;html=1;" value="编排完整转换:复用转换器/OCR client → 按后缀补充 OCR → 收集 oMLX warning → ConvertResult。" vertex="1">
           <mxGeometry height="50" width="600" x="520" y="1242" as="geometry" />
         </mxCell>
         <mxCell id="p3_c_22_3" parent="1" style="fillColor=#FFFFFF;strokeColor=#E2E8F0;fontColor=#1E293B;fontSize=11;align=left;verticalAlign=middle;spacingLeft=8;;rounded=1;whiteSpace=wrap;html=1;" value="file_stream: BinaryIO, source_file: SourceFile" vertex="1">
@@ -955,10 +955,10 @@
         <mxCell id="p3_f_23" parent="1" style="fillColor=#DCFCE7;strokeColor=#16A34A;fontColor=#16A34A;fontSize=12;;rounded=1;whiteSpace=wrap;html=1;" value="&lt;b&gt;convert/service.py&lt;/b&gt;" vertex="1">
           <mxGeometry height="50" width="230" x="50" y="1292" as="geometry" />
         </mxCell>
-        <mxCell id="p3_c_23_1" parent="1" style="fillColor=#F8FAFC;strokeColor=#E2E8F0;fontColor=#1E293B;fontSize=11;align=left;verticalAlign=middle;spacingLeft=8;;rounded=1;whiteSpace=wrap;html=1;" value="ConvertService._build_conversion_runtime" vertex="1">
+        <mxCell id="p3_c_23_1" parent="1" style="fillColor=#F8FAFC;strokeColor=#E2E8F0;fontColor=#1E293B;fontSize=11;align=left;verticalAlign=middle;spacingLeft=8;;rounded=1;whiteSpace=wrap;html=1;" value="ConvertService.__init__" vertex="1">
           <mxGeometry height="50" width="240" x="280" y="1292" as="geometry" />
         </mxCell>
-        <mxCell id="p3_c_23_2" parent="1" style="fillColor=#F8FAFC;strokeColor=#E2E8F0;fontColor=#1E293B;fontSize=11;align=left;verticalAlign=middle;spacingLeft=8;;rounded=1;whiteSpace=wrap;html=1;" value="固定构造 OmlxOcrClient 并启用 MarkItDown plugin；发现图片时才访问模型。" vertex="1">
+        <mxCell id="p3_c_23_2" parent="1" style="fillColor=#F8FAFC;strokeColor=#E2E8F0;fontColor=#1E293B;fontSize=11;align=left;verticalAlign=middle;spacingLeft=8;;rounded=1;whiteSpace=wrap;html=1;" value="固定构造 OmlxOcrClient；MarkItDown 禁用 plugins，发现图片时才访问模型。" vertex="1">
           <mxGeometry height="50" width="600" x="520" y="1292" as="geometry" />
         </mxCell>
         <mxCell id="p3_c_23_3" parent="1" style="fillColor=#F8FAFC;strokeColor=#E2E8F0;fontColor=#1E293B;fontSize=11;align=left;verticalAlign=middle;spacingLeft=8;;rounded=1;whiteSpace=wrap;html=1;" value="无运行时开关" vertex="1">
@@ -973,10 +973,10 @@
         <mxCell id="p3_f_24" parent="1" style="fillColor=#DCFCE7;strokeColor=#16A34A;fontColor=#16A34A;fontSize=12;;rounded=1;whiteSpace=wrap;html=1;" value="&lt;b&gt;convert/service.py&lt;/b&gt;" vertex="1">
           <mxGeometry height="50" width="230" x="50" y="1342" as="geometry" />
         </mxCell>
-        <mxCell id="p3_c_24_1" parent="1" style="fillColor=#FFFFFF;strokeColor=#E2E8F0;fontColor=#1E293B;fontSize=11;align=left;verticalAlign=middle;spacingLeft=8;;rounded=1;whiteSpace=wrap;html=1;" value="MarkItDown plugin 路由" vertex="1">
+        <mxCell id="p3_c_24_1" parent="1" style="fillColor=#FFFFFF;strokeColor=#E2E8F0;fontColor=#1E293B;fontSize=11;align=left;verticalAlign=middle;spacingLeft=8;;rounded=1;whiteSpace=wrap;html=1;" value="MarkItDown 内置 converter 路由" vertex="1">
           <mxGeometry height="50" width="240" x="280" y="1342" as="geometry" />
         </mxCell>
-        <mxCell id="p3_c_24_2" parent="1" style="fillColor=#FFFFFF;strokeColor=#E2E8F0;fontColor=#1E293B;fontSize=11;align=left;verticalAlign=middle;spacingLeft=8;;rounded=1;whiteSpace=wrap;html=1;" value="plugin 根据文档内容决定是否调用 OCR；项目不自行判断文件类型。" vertex="1">
+        <mxCell id="p3_c_24_2" parent="1" style="fillColor=#FFFFFF;strokeColor=#E2E8F0;fontColor=#1E293B;fontSize=11;align=left;verticalAlign=middle;spacingLeft=8;;rounded=1;whiteSpace=wrap;html=1;" value="ConvertService 按后缀补充 PDF/嵌入图片 OCR；MarkItDown 负责基础格式识别。" vertex="1">
           <mxGeometry height="50" width="600" x="520" y="1342" as="geometry" />
         </mxCell>
         <mxCell id="p3_c_24_3" parent="1" style="fillColor=#FFFFFF;strokeColor=#E2E8F0;fontColor=#1E293B;fontSize=11;align=left;verticalAlign=middle;spacingLeft=8;;rounded=1;whiteSpace=wrap;html=1;" value="source_file, file_stream" vertex="1">
