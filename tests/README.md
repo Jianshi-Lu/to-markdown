@@ -4,7 +4,7 @@
 `/convert` 接口；运行前先启动服务：
 
 ```bash
-.venv/bin/python run_server.py --reload
+uv run python -m api.server --reload
 ```
 
 项目服务默认地址为 `http://127.0.0.1:8081`。如果使用其他地址，运行测试脚本前设置 `TO_MARKDOWN_BASE_URL`。
@@ -18,7 +18,7 @@
 每次执行前完全清空 `test_files/output/`：
 
 ```bash
-.venv/bin/python tests/convert_all.py
+uv run python tests/convert_all.py
 ```
 
 它按文件顺序串行请求接口。每个输出保留输入的相对目录，并追加
@@ -29,7 +29,7 @@
 ## 单文件转换
 
 ```bash
-.venv/bin/python tests/convert.py tests/test_files/input/test_pdf.pdf
+uv run python tests/convert.py tests/test_files/input/test_pdf.pdf
 ```
 
 默认输出为 `tests/test_files/output/converted/test_pdf_converted.md`。
@@ -37,13 +37,13 @@
 第二个参数可以指定输出目录：
 
 ```bash
-.venv/bin/python tests/convert.py /path/to/input.docx /path/to/output/
+uv run python tests/convert.py /path/to/input.docx /path/to/output/
 ```
 
 也可以指定 Markdown 文件名。脚本会在扩展名前自动追加 `_converted`：
 
 ```bash
-.venv/bin/python tests/convert.py /path/to/input.docx /path/to/result.md
+uv run python tests/convert.py /path/to/input.docx /path/to/result.md
 ```
 
 实际输出为 `/path/to/result_converted.md`。

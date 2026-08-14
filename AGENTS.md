@@ -41,7 +41,7 @@
 
 | 技术 | 当前用途 |
 | --- | --- |
-| Python | 服务实现语言；本地项目使用 Python 3.13 虚拟环境 |
+| Python | 服务实现语言；uv 解释器约束与 chat-agent 一致，为 Python >=3.13 |
 | FastAPI | HTTP 路由、multipart 上传和异常处理 |
 | Uvicorn | ASGI 服务运行器 |
 | MarkItDown | 文件类型识别和 Markdown 转换；只启用内置转换器 |
@@ -49,31 +49,34 @@
 | OpenAI Python SDK + httpx | 以 OpenAI-compatible client 方式调用本地 oMLX |
 | oMLX | 独立 OCR/VLM 模型服务 |
 | unittest / pytest | 自动化测试 |
+| uv | Python 版本、依赖和锁文件管理 |
 
 正式运行时不依赖 MinIO SDK，也没有对象存储、数据库或本地结果持久化模块。
-仓库当前没有提交 `pyproject.toml`、`requirements.txt` 或正式依赖锁定文件。
+仓库以 `pyproject.toml` 声明正式依赖，以 `uv.lock` 锁定解析结果；`.venv/`
+由 `uv sync` 创建和同步，不手工使用 `pip install` 管理正式服务依赖。
 
 启动服务：
 
 ```bash
-.venv/bin/python run_server.py
+uv sync
+uv run python -m api.server
 ```
 
 开发热重载：
 
 ```bash
-.venv/bin/python run_server.py --reload
+uv run python -m api.server --reload
 ```
 
 默认地址为 `http://127.0.0.1:8081`，可通过 `SERVER_HOST`、`SERVER_PORT`、
-`SERVER_LOG_LEVEL` 覆盖。
+`SERVER_LOG_LEVEL` 覆盖。运行配置从 `configuration/.env` 读取；IDE 或启动进程
+中已设置的同名环境变量优先覆盖 `.env` 中的值。
 
 ## 3. 目录与职责
 
 ```text
-main.py                         # FastAPI app、lifespan、AppError HTTP 出口
-run_server.py                   # Uvicorn 启动参数
 api/
+  server.py                     # FastAPI app、lifespan、Uvicorn 启动入口
   convert.py                    # POST /convert：multipart -> text/markdown
   health.py                     # GET /health、GET /health/omlx
   dependencies.py               # 从 app.state 提供共享 ConvertService
@@ -86,11 +89,10 @@ integrations/
   embedded_image_ocr.py         # 嵌入位图按需 OCR（PDF/Office）
   omlx.py                       # oMLX/OpenAI-compatible OCR 适配
 core/
-  config.py                     # 进程级 Settings
   errors.py                     # AppError 及具体异常
   logging.py                    # 日志入口
-archive/
-  integrations/minio.py        # 历史 MinIO 适配，不进入正式运行链路
+configuration/
+  config.py                     # 进程级 Settings
 tests/                          # 自动化、HTTP 脚本、Postman 和测试输入
 experiments/                    # 与正式运行时隔离的模型实验
 docs/                           # 架构和代码参考
@@ -102,11 +104,8 @@ docs/                           # 架构和代码参考
 api -> convert / dependencies / core
 convert -> integrations / core / internal types
 integrations -> 第三方 SDK / core.errors
-main -> api / convert / core
-archive -/-> 正式运行模块
+api.server -> api routers / convert / core
 ```
-
-`main.py`、`api/`、`convert/` 和正式 `integrations/` 不得导入 `archive`。
 
 ## 4. HTTP 接口契约
 
@@ -217,7 +216,9 @@ PDF 先扫描是否含嵌入位图：无位图时整篇单遍调用内置 PdfCon
 
 ## 7. 配置与敏感信息
 
-`core/config.py` 在模块导入时构造冻结的 `SETTINGS`：
+`configuration/config.py` 在模块导入时先读取同目录 `.env`，不覆盖已存在的进程环境变量；
+转换与 HTTP 监听配置分别由冻结 dataclass 和缓存的 `get_conversion_settings()` /
+`get_http_server_settings()` 读取：
 
 | 环境变量 | 用途 |
 | --- | --- |
@@ -230,7 +231,7 @@ PDF 先扫描是否含嵌入位图：无位图时整篇单遍调用内置 PdfCon
 | `OMLX_OCR_REPETITION_PENALTY` | OCR 重复惩罚 |
 | `ON_DEMAND_OCR_ENABLED` | 是否启用嵌入位图按需 OCR（默认 1） |
 | `MAX_UPLOAD_MB` | multipart 文件大小上限 |
-| `SERVER_HOST` / `SERVER_PORT` / `SERVER_LOG_LEVEL` | Uvicorn 配置 |
+| `SERVER_HOST` / `SERVER_PORT` / `SERVER_LOG_LEVEL` | `HttpServerSettings` 的 Uvicorn 配置 |
 
 正式配置中不存在 `MINIO_*` 或 `TEMP_DIR`。不要把真实凭据写入文档、源码、
 测试输出或提交记录。
@@ -243,7 +244,7 @@ PDF 先扫描是否含嵌入位图：无位图时整篇单遍调用内置 PdfCon
 | `ConversionError` | 422 | MarkItDown 转换失败 |
 | `OmlxUnavailableError` | 503 | oMLX 健康检查或连接失败 |
 
-`main.py` 将 `AppError` 转换为：
+`api/server.py` 将 `AppError` 转换为：
 
 ```json
 {"error":"conversion_failed","message":"..."}
@@ -255,7 +256,7 @@ traceback、凭据或内部网络认证信息。
 ## 9. 测试与验证
 
 ```bash
-.venv/bin/python -m pytest -q
+uv run pytest -q
 ```
 
 当前测试覆盖：
@@ -275,8 +276,8 @@ Postman 集合只调用 multipart `/convert`，不要求 MinIO。
 - 非致命 OCR warning 保留在内部 `ConvertResult`，成功的文件响应不携带 warning envelope；
 - 无文字矢量图形（流程图/图标）没有可 OCR 文本，unlimited-ocr 也无法给出语义描述；
 - OCR 文本质量取决于 unlimited-ocr 模型本身，服务只保证按需触发和结果回插；
-- 没有正式依赖锁定、容器编排、认证、限流和生产指标；
-- `archive/` 和 `experiments/` 不属于正式运行时。
+- 已通过 `pyproject.toml` 和 `uv.lock` 锁定依赖；仍没有容器编排、认证、限流和生产指标；
+- `experiments/` 不属于正式运行时。
 
 ## 11. 修改时必须保持的约束
 

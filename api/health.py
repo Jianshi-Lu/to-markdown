@@ -4,7 +4,7 @@ from fastapi import APIRouter
 
 from integrations.omlx import assert_omlx_reachable
 from api.models.health import HealthResponse, OmlxHealthResponse
-from core.config import SETTINGS
+from configuration import get_conversion_settings
 
 router = APIRouter(tags=["health"])
 
@@ -16,9 +16,10 @@ async def health() -> HealthResponse:
 
 @router.get("/health/omlx", response_model=OmlxHealthResponse)
 async def omlx_health() -> OmlxHealthResponse:
-    assert_omlx_reachable(SETTINGS.omlx_base_url)
+    settings = get_conversion_settings()
+    assert_omlx_reachable(settings.omlx_base_url)
     return OmlxHealthResponse(
         status="ok",
-        base_url=SETTINGS.omlx_base_url,
-        model=SETTINGS.omlx_model,
+        base_url=settings.omlx_base_url,
+        model=settings.omlx_model,
     )

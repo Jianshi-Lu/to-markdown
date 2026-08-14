@@ -6,7 +6,7 @@
 2. 启动 Python 服务：
 
    ```bash
-   .venv/bin/python run_server.py
+   uv run python -m api.server
    ```
 
 ## 使用方式

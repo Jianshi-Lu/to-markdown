@@ -8,9 +8,9 @@ from fastapi.responses import Response
 from starlette.concurrency import run_in_threadpool
 
 from api.dependencies import get_convert_service
-from core.config import SETTINGS
 from core.errors import UploadTooLargeError
 from convert import ConvertService, SourceFile
+from configuration import get_conversion_settings
 
 router = APIRouter(tags=["convert"])
 
@@ -66,10 +66,11 @@ async def convert_file(
 def _validate_upload_size(file: UploadFile) -> None:
     """根据 multipart 解析器记录的文件大小拒绝超限请求。"""
 
-    max_bytes = SETTINGS.max_upload_mb * 1024 * 1024
+    settings = get_conversion_settings()
+    max_bytes = settings.max_upload_mb * 1024 * 1024
     if file.size is not None and file.size > max_bytes:
         raise UploadTooLargeError(
-            f"Uploaded file is larger than {SETTINGS.max_upload_mb} MB."
+            f"Uploaded file is larger than {settings.max_upload_mb} MB."
         )
 
 

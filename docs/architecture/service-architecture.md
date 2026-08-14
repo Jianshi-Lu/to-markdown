@@ -77,10 +77,10 @@ POST /convert
 
 ## 配置项
 
-配置通过环境变量读取：
+配置从 `configuration/.env` 读取；IDE 或启动进程中已设置的同名环境变量优先覆盖 `.env`：
 
 - `OMLX_BASE_URL`：默认 `http://127.0.0.1:8000/v1`。
-- `OMLX_API_KEY`：默认 `20020228`，作为本地 oMLX 占位 token。
+- `OMLX_API_KEY`：默认 `local`，仅作为本地无鉴权服务的占位 token；真实凭据由环境变量注入。
 - `OMLX_MODEL`：默认 `unlimited-ocr-mxfp8-mlx`。
 - OCR 文档解析提示词固定为 `document parsing.`，直接写入 `Settings`，不从环境变量覆盖。
 - `OMLX_OCR_MAX_TOKENS`：OCR 最大输出 token，默认 `16384`。
@@ -115,7 +115,6 @@ POST /convert
 - 文本 LLM 二次重写。
 - 页面端 UI。
 
-历史 MinIO 适配器保存在 `archive/integrations/minio.py`，不属于正式服务依赖。
 若调用方使用 MinIO，应在调用方完成下载和返回 Markdown 的上传。
 
 独立的模型退化排错材料位于

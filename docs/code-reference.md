@@ -5,16 +5,16 @@
 ## 1. 代码范围与启动方式
 
 ```text
-main.py
-run_server.py
 api/
+  server.py
   convert.py
   health.py
   dependencies.py
   models/
     health.py
-core/
+configuration/
   config.py
+core/
   errors.py
   logging.py
 convert/
@@ -24,9 +24,6 @@ integrations/
   markitdown.py
   embedded_image_ocr.py
   omlx.py
-archive/
-  integrations/
-    minio.py
 tests/
 experiments/
 ```
@@ -34,17 +31,18 @@ experiments/
 项目根目录就是 Python import root。服务启动命令为：
 
 ```bash
-.venv/bin/python run_server.py --reload
+uv sync
+uv run python -m api.server --reload
 ```
 
-`run_server.py` 负责启动 Uvicorn；`uvicorn` 导入 `main:app`，`main.py` 负责创建 FastAPI 应用和注册路由。
+`api/server.py` 同时负责创建 FastAPI 应用、注册路由和启动 Uvicorn；服务以 `python -m api.server` 运行，热重载时由 Uvicorn 导入 `api.server:app`。
 
 ## 2. 模块依赖方向
 
 ```mermaid
 flowchart TB
-    Main[main.py] --> API[api]
-    Main --> Core[core.errors]
+    Server[api/server.py] --> API[api routers]
+    Server --> Core[core.errors]
     API --> Convert[convert]
     API --> Models[api.models]
     API --> Dependencies[api.dependencies]
@@ -95,7 +93,7 @@ unlimited-ocr。文件中没有嵌入位图时不会访问 oMLX。
 
 ### 3.3 统一错误
 
-`main.py` 将 `AppError` 转换为：
+`api/server.py` 将 `AppError` 转换为：
 
 ```json
 {
@@ -112,24 +110,24 @@ unlimited-ocr。文件中没有嵌入位图时不会访问 oMLX。
 
 ## 4. 应用生命周期
 
-### 4.1 `main.py`
+### 4.1 `api/server.py`
 
 `create_app()` 创建 FastAPI 实例，注册两个 router 和 `AppError` 异常处理器，并绑定 `lifespan`。
 
 应用启动时：
 
-1. 从进程级 `SETTINGS` 创建一个 `ConvertService`。
+1. 从缓存的 `get_conversion_settings()` 创建一个 `ConvertService`。
 2. `ConvertService` 创建一个 `OmlxOcrClient`、一个 `MarkItDownConverter` 和一个 `EmbeddedImageOcr`。
 3. 服务对象保存到 `app.state.convert_service`，由 `api.dependencies.get_convert_service()` 通过 `Depends` 提供给每个请求复用。
 
 应用关闭时调用 `ConvertService.close()`，释放 oMLX/OpenAI SDK 持有的 HTTP 资源。
 
-### 4.2 `run_server.py`
+### 4.2 Uvicorn 启动
 
-`run_server.py` 只解析 `--host`、`--port`、`--reload` 和 `--log-level`，然后调用：
+`api.server.main()` 先调用 `get_http_server_settings()` 取得 `SERVER_HOST`、`SERVER_PORT` 和 `SERVER_LOG_LEVEL`，再保留 `--host`、`--port`、`--reload` 和 `--log-level` 作为命令行覆盖。正常运行直接向 Uvicorn 传入模块级 `app`；热重载时传入可重新导入的路径：
 
 ```python
-uvicorn.run("main:app", ...)
+uvicorn.run("api.server:app", ...)
 ```
 
 它不创建第二套 FastAPI 应用，也不包含转换业务。
@@ -189,14 +187,15 @@ class ConvertResult:
     warnings: list[str]
 ```
 
-### 6.2 `core/config.py`
+### 6.2 `configuration/config.py`
 
-模块级 `SETTINGS` 在进程导入时读取环境变量并生成不可变 `Settings` 快照。
+模块导入时先读取 `configuration/.env`，但不会覆盖 IDE 或启动进程中已设置的同名环境变量；
+缓存的 `get_conversion_settings()` 再生成不可变 `Settings` 快照。
 
 | 配置 | 环境变量 | 默认值 |
 | --- | --- | --- |
 | oMLX 地址 | `OMLX_BASE_URL` | `http://127.0.0.1:8000/v1` |
-| oMLX API key | `OMLX_API_KEY` | `20020228` |
+| oMLX API key | `OMLX_API_KEY` | `local`（仅本地占位） |
 | oMLX 模型 | `OMLX_MODEL` | `unlimited-ocr-mxfp8-mlx` |
 | OCR prompt | 硬编码于 `Settings` | `document parsing.` |
 | 最大 OCR 输出 | `OMLX_OCR_MAX_TOKENS` | `16384` |
@@ -206,6 +205,15 @@ class ConvertResult:
 | 上传大小上限 | `MAX_UPLOAD_MB` | `100` |
 | 按需 OCR 开关 | `ON_DEMAND_OCR_ENABLED` | `1` |
 | 嵌入位图 OCR 提示词 | 硬编码于 `Settings` | `document parsing.` |
+
+`HttpServerSettings` 是单独的冻结、带 `slots` 的监听配置；
+`get_http_server_settings()` 使用 `lru_cache` 在 `api.server.main()` 启动时读取以下环境变量：
+
+| 配置 | 环境变量 | 默认值 |
+| --- | --- | --- |
+| 监听地址 | `SERVER_HOST` | `127.0.0.1` |
+| 监听端口 | `SERVER_PORT` | `8081` |
+| 日志级别 | `SERVER_LOG_LEVEL` | `INFO` |
 
 ### 6.3 `core/errors.py`
 
@@ -337,5 +345,5 @@ MarkItDown(
 
 ```bash
 rg -n "^(class |def |async def |@router\\.)" \
-  main.py api core convert integrations tests experiments
+  api configuration core convert integrations tests experiments
 ```

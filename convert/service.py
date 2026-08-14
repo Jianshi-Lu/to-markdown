@@ -9,8 +9,8 @@ import pypdfium2 as pdfium
 from integrations.embedded_image_ocr import EmbeddedImageOcr
 from integrations.markitdown import MarkItDownConverter
 from integrations.omlx import OmlxOcrClient
-from core.config import Settings
 from convert.types import ConvertResult, SourceFile
+from configuration.config import Settings
 
 
 class ConvertService:

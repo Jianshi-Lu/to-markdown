@@ -2,6 +2,28 @@
 
 默认服务地址：`http://127.0.0.1:8081`
 
+## 安装、启动与测试
+
+本服务使用 [uv](https://docs.astral.sh/uv/) 管理 Python 版本、依赖和锁文件；
+Python 解释器约束与 `chat-agent` 一致，为 `>=3.13`。
+在仓库根目录执行：
+
+```bash
+uv sync
+uv run python -m api.server
+```
+
+开发热重载使用 `uv run python -m api.server --reload`，完整测试使用
+`uv run pytest -q`。部署或 CI 应使用已提交锁文件：
+
+```bash
+uv sync --locked --no-dev
+uv run --locked --no-dev python -m api.server
+```
+
+运行配置从 `configuration/.env` 读取；IDE 或启动进程中已设置的同名环境变量优先
+覆盖 `.env` 中的值。
+
 完整的自动生成文档：
 
 - Redoc：<http://127.0.0.1:8081/redoc>

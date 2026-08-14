@@ -25,20 +25,12 @@ token。对照组上限为 1024。
 
 ## 独立运行
 
-先确保 oMLX 已启动并加载 `unlimited-ocr-mxfp8-mlx`。在当前目录执行：
+先确保 oMLX 已启动并加载 `unlimited-ocr-mxfp8-mlx`。在仓库根目录执行：
 
 ```bash
-python3 prepare_fixture.py
-python3 -m venv .venv
-.venv/bin/pip install -r requirements.txt
-.venv/bin/python reproduce.py
-```
-
-如果直接复用项目环境，也可以执行：
-
-```bash
-python prepare_fixture.py
-../../.venv/bin/python reproduce.py
+uv sync
+uv run python experiments/omlx_ocr_degeneration/prepare_fixture.py
+uv run python experiments/omlx_ocr_degeneration/reproduce.py
 ```
 
 服务地址、API key 和模型名可通过 `OMLX_BASE_URL`、`OMLX_API_KEY`、

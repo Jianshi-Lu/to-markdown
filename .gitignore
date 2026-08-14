@@ -17,3 +17,8 @@ venv/
 *.log
 .runtime/
 tests/test_files/output/
+
+# Environment variables and local secrets
+.env
+.env.*
+!.env.example

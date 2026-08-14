@@ -13,15 +13,16 @@
 ## 目录结构
 
 ```text
-main.py
 api/
+  server.py
   convert.py
   health.py
   dependencies.py
   models/
     health.py
-core/
+configuration/
   config.py
+core/
   errors.py
   logging.py
 convert/
@@ -31,24 +32,21 @@ integrations/
   markitdown.py
   embedded_image_ocr.py
   omlx.py
-archive/
-  integrations/
-    minio.py
 ```
 
-根目录就是服务代码根，不再额外套一层 `to_markdown/` 包。`main.py` 是唯一服务入口，直接创建 FastAPI app。
+根目录就是服务代码根，不再额外套一层 `to_markdown/` 包。`api/server.py` 是唯一服务入口，直接创建 FastAPI app 并启动 Uvicorn。
 
 启动方式：
 
 ```bash
-.venv/bin/python run_server.py --reload
+uv run python -m api.server --reload
 ```
 
 ## 包职责
 
-### `main.py`
+### `api/server.py`
 
-创建 FastAPI app，注册 router、统一异常处理，并在 lifespan 中创建和释放共享的 `ConvertService`。这里不写具体转换逻辑。
+创建 FastAPI app，注册 router、统一异常处理，并在 lifespan 中创建和释放共享的 `ConvertService`。`main()` 解析原有服务参数并启动 Uvicorn；这里不写具体转换逻辑。
 
 ### `api`
 
@@ -61,11 +59,16 @@ HTTP API 层。
 
 这一层不直接 import `MarkItDown`、`OpenAI` 或 `httpx`。
 
+### `configuration`
+
+项目基础设施。
+
+- `config.py`：读取同目录 `.env`（不覆盖已存在的进程变量）；缓存的 `get_conversion_settings()` 和 `get_http_server_settings()` 分别生成转换与 HTTP 监听配置。
+
 ### `core`
 
 项目基础设施。
 
-- `config.py`：读取环境变量，生成 `Settings`。
 - `errors.py`：定义统一业务异常。
 - `logging.py`：保留统一日志入口。
 
@@ -99,13 +102,6 @@ HTTP API 层。
   - 提供 oMLX 可达性检查。
 
 项目其他层不直接依赖 OpenAI SDK 和 MarkItDown 细节。
-
-### `archive`
-
-保存已经退出正式运行链路的历史实现。
-
-- `archive/integrations/minio.py`：保留历史 MinIO 适配器，不由 `main`、`api`、
-  `convert` 或正式 `integrations` 导入。
 
 正式服务不包含文件存储层。FastAPI 将 multipart 文件暴露为 `UploadFile`，API
 把其请求级文件流直接交给 `ConvertService`；调用方负责原文件读取、Markdown

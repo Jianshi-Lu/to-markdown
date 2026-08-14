@@ -7,7 +7,7 @@ from types import SimpleNamespace
 import fitz
 from PIL import Image, ImageDraw
 
-from core.config import Settings
+from configuration.config import Settings
 from integrations.embedded_image_ocr import EmbeddedImageOcr
 
 

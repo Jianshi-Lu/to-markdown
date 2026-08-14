@@ -157,7 +157,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--base-url",
         default=os.getenv("OMLX_BASE_URL", "http://127.0.0.1:8000/v1"),
     )
-    parser.add_argument("--api-key", default=os.getenv("OMLX_API_KEY", "20020228"))
+    parser.add_argument("--api-key", default=os.getenv("OMLX_API_KEY", "local"))
     parser.add_argument(
         "--model",
         default=os.getenv("OMLX_MODEL", "unlimited-ocr-mxfp8-mlx"),
