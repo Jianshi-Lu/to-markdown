@@ -43,7 +43,11 @@ BYTE_DECODER = {value: key for key, value in bytes_to_unicode().items()}
 
 
 def decode_tokenizer_bytes(text: str) -> str:
-    """恢复 byte-level tokenizer 文本，无效 UTF-8 字节使用替换字符。"""
+    """仅在 byte-level 字符序列能完整组成 UTF-8 时执行恢复。
+
+    正常 OCR 文本可能直接包含 ``é``、``£`` 等字符；它们单独映射成一个字节后
+    并不是合法 UTF-8。旧实现使用替换字符解码会把这些合法字符改成 ``�``。
+    """
 
     decoded_bytes = bytearray()
 
@@ -54,7 +58,10 @@ def decode_tokenizer_bytes(text: str) -> str:
         else:
             decoded_bytes.append(byte)
 
-    return decoded_bytes.decode("utf-8", errors="replace")
+    try:
+        return decoded_bytes.decode("utf-8", errors="strict")
+    except UnicodeDecodeError:
+        return text
 
 
 def assert_omlx_reachable(base_url: str) -> None:
@@ -142,7 +149,7 @@ class OmlxChatCompletions:
                     "The oMLX request could not be completed.",
                 ]
             )
-            call_state.add_error(message)
+            call_state.add_error(message, code="OCR_SERVICE_UNAVAILABLE")
             raise OmlxUnavailableError(message) from exc
         except Exception as exc:
             message = "\n".join(
@@ -153,7 +160,7 @@ class OmlxChatCompletions:
                     f"Error: {type(exc).__name__}: {exc}",
                 ]
             )
-            call_state.add_error(message)
+            call_state.add_error(message, code="OCR_REQUEST_FAILED")
             raise
 
         choices = []

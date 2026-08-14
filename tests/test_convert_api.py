@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 from api.convert import router
 from api.dependencies import get_convert_service
 from convert import ConvertResult
+from api.server import app
 
 
 class FakeConvertService:
@@ -114,3 +115,17 @@ def test_convert_exposes_ocr_warning_headers() -> None:
     assert response.status_code == 200
     assert response.headers["x-conversion-partial"] == "true"
     assert response.headers["x-conversion-warnings"] == "OCR_OUTPUT_DEGENERATED"
+
+
+def test_invalid_pdf_uses_safe_conversion_error_contract() -> None:
+    with TestClient(app, raise_server_exceptions=False) as client:
+        response = client.post(
+            "/convert",
+            files={"file": ("broken.pdf", b"not a pdf", "application/pdf")},
+        )
+
+    assert response.status_code == 422
+    assert response.json() == {
+        "error": "conversion_failed",
+        "message": "File conversion failed.",
+    }

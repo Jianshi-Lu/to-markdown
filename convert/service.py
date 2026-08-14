@@ -9,6 +9,7 @@ import pypdfium2 as pdfium
 from integrations.embedded_image_ocr import EmbeddedImageOcr
 from integrations.markitdown import MarkItDownConverter
 from integrations.omlx import OmlxOcrClient
+from core.errors import ConversionError
 from convert.types import ConvertResult, SourceFile
 from configuration.config import Settings
 
@@ -63,6 +64,10 @@ class ConvertService:
             file_stream.seek(0)
             file_bytes = file_stream.read()
             markdown = self._convert_data(file_bytes, source_file)
+        except pdfium.PdfiumError as exc:
+            # 非法 PDF 由 pypdfium2 抛出 PdfiumError；对这一已知输入错误保持
+            # conversion_failed/422 契约，且不回显第三方异常文本。
+            raise ConversionError("File conversion failed.") from exc
         finally:
             ocr_call_state = self._omlx_ocr_client.end_request(request_token)
         warnings.extend(ocr_call_state.errors)

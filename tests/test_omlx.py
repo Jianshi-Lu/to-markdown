@@ -4,6 +4,7 @@ from types import SimpleNamespace
 from integrations.omlx import (
     OmlxChatCompletions,
     OmlxOcrCallState,
+    decode_tokenizer_bytes,
     has_ocr_output_anomaly,
     has_repetitive_loop,
     trim_repetitive_loop,
@@ -26,6 +27,11 @@ class FakeCompletions:
                 )
             ]
         )
+
+
+class FailingCompletions:
+    def create(self, *args, **kwargs):
+        raise RuntimeError("downstream failure")
 
 
 class OmlxChatCompletionsTest(unittest.TestCase):
@@ -228,6 +234,21 @@ class OmlxChatCompletionsTest(unittest.TestCase):
 
         self.assertEqual(first_state.request_count, 1)
         self.assertEqual(second_state.request_count, 1)
+
+    def test_failed_ocr_request_marks_conversion_as_partial(self) -> None:
+        state = OmlxOcrCallState()
+        wrapper = self.create_wrapper(FailingCompletions(), state)
+
+        with self.assertRaises(RuntimeError):
+            wrapper.create(model="ocr-model", messages=[])
+
+        self.assertEqual(state.warning_codes, ["OCR_REQUEST_FAILED"])
+
+    def test_byte_decoder_preserves_valid_direct_unicode(self) -> None:
+        self.assertEqual(decode_tokenizer_bytes("café costs £10"), "café costs £10")
+
+    def test_byte_decoder_repairs_valid_tokenizer_byte_sequence(self) -> None:
+        self.assertEqual(decode_tokenizer_bytes("Â£10"), "£10")
 
 
 if __name__ == "__main__":

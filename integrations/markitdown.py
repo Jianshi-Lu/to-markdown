@@ -1,12 +1,16 @@
 """MarkItDown 转换集成。"""
 
 import io
+import logging
 from pathlib import Path
 from typing import Any, BinaryIO
 
 from markitdown import MarkItDown, StreamInfo
 
 from core.errors import ConversionError
+
+
+log = logging.getLogger(__name__)
 
 
 class MarkItDownConverter:
@@ -65,7 +69,13 @@ class MarkItDownConverter:
                 ),
             )
         except Exception as exc:
-            raise ConversionError(f"MarkItDown conversion failed: {exc}") from exc
+            # 第三方异常可能包含临时路径、内部 URL 或响应正文，只记录异常类型，
+            # 对调用方保持稳定且不泄露内部信息的错误消息。
+            log.warning(
+                "MarkItDown conversion failed: exceptionType=%s",
+                type(exc).__name__,
+            )
+            raise ConversionError("File conversion failed.") from exc
         finally:
             if should_detach:
                 # 文件流由 FastAPI/上层调用方持有，适配层不能提前关闭它。
